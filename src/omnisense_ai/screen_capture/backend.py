@@ -1,86 +1,43 @@
 """Screen capture backend interfaces and the mss implementation."""
-
 from __future__ import annotations
-
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Protocol
-
 from .errors import CaptureBackendError
-from .models import CaptureRegion, FrameSource, MonitorInfo, ScreenFrame
-
-
+from .models import CaptureRegion, FrameSource, MonitorInfo, PixelFormat, ScreenFrame
 class ScreenCaptureBackend(Protocol):
-    """Backend interface used by the capture service."""
-
-    def enumerate_monitors(self) -> Sequence[MonitorInfo]:
-        """Return available monitors."""
-
-    def capture_monitor(self, monitor: MonitorInfo) -> ScreenFrame:
-        """Capture the supplied monitor."""
-
-    def capture_region(self, monitor: MonitorInfo, region: CaptureRegion) -> ScreenFrame:
-        """Capture a validated region from the supplied monitor."""
-
-    def close(self) -> None:
-        """Release backend resources."""
-
-
+    def open(self)->None: ...
+    def enumerate_monitors(self)->Sequence[MonitorInfo]: ...
+    def capture_monitor(self, monitor:MonitorInfo)->ScreenFrame: ...
+    def capture_region(self, monitor:MonitorInfo, region:CaptureRegion)->ScreenFrame: ...
+    def close(self)->None: ...
 class MssScreenCaptureBackend:
-    """Screen capture backend implemented with mss."""
-
-    def __init__(self) -> None:
+    def __init__(self):
+        try: import mss
+        except ImportError as exc: raise CaptureBackendError("mss is required for real screen capture.") from exc
+        self._mss_module=mss; self._capture=None; self.open()
+    def open(self):
+        if self._capture is not None: return
+        try: self._capture=self._mss_module.mss()
+        except Exception as exc: raise CaptureBackendError("Unable to initialize screen capture backend.") from exc
+    def _require_open(self):
+        if self._capture is None: raise CaptureBackendError("Screen capture backend is closed.")
+        return self._capture
+    def enumerate_monitors(self)->Sequence[MonitorInfo]:
         try:
-            import mss
-        except ImportError as exc:
-            raise CaptureBackendError("mss is required for real screen capture.") from exc
-
-        self._mss_module = mss
-        self._capture = mss.mss()
-
-    def enumerate_monitors(self) -> Sequence[MonitorInfo]:
-        monitors = []
-        for index, raw_monitor in enumerate(self._capture.monitors[1:], start=1):
-            monitors.append(
-                MonitorInfo(
-                    id=str(index),
-                    x=int(raw_monitor["left"]),
-                    y=int(raw_monitor["top"]),
-                    width=int(raw_monitor["width"]),
-                    height=int(raw_monitor["height"]),
-                    is_primary=index == 1,
-                    name=f"Monitor {index}",
-                )
-            )
-        return monitors
-
-    def capture_monitor(self, monitor: MonitorInfo) -> ScreenFrame:
-        return self.capture_region(monitor, monitor.region)
-
-    def capture_region(self, monitor: MonitorInfo, region: CaptureRegion) -> ScreenFrame:
-        raw_region = {
-            "left": region.x,
-            "top": region.y,
-            "width": region.width,
-            "height": region.height,
-        }
+            raw=self._require_open().monitors
+            return [MonitorInfo(id=str(i),x=int(m["left"]),y=int(m["top"]),width=int(m["width"]),height=int(m["height"]),is_primary=i==1,name=f"Monitor {i}") for i,m in enumerate(raw[1:],1)]
+        except CaptureBackendError: raise
+        except Exception as exc: raise CaptureBackendError("Unable to enumerate monitors.") from exc
+    def capture_monitor(self, monitor): return self.capture_region(monitor,monitor.region)
+    def capture_region(self, monitor, region):
         try:
-            screenshot = self._capture.grab(raw_region)
-        except Exception as exc:
-            raise CaptureBackendError("Screen capture backend failed.") from exc
-
-        return ScreenFrame(
-            data=bytes(screenshot.raw),
-            width=int(screenshot.width),
-            height=int(screenshot.height),
-            pixel_format="BGRA",
-            monitor_id=monitor.id,
-            source=FrameSource.REGION if region != monitor.region else FrameSource.MONITOR,
-            captured_at=datetime.now(timezone.utc),
-            region=region,
-        )
-
-    def close(self) -> None:
-        close = getattr(self._capture, "close", None)
-        if close is not None:
-            close()
+            s=self._require_open().grab({"left":region.x,"top":region.y,"width":region.width,"height":region.height})
+            return ScreenFrame(bytes(s.raw),int(s.width),int(s.height),PixelFormat.BGRA.value,monitor.id,FrameSource.REGION if region!=monitor.region else FrameSource.MONITOR,datetime.now(timezone.utc),region)
+        except CaptureBackendError: raise
+        except Exception as exc: raise CaptureBackendError("Screen capture backend failed.") from exc
+    def close(self):
+        capture,self._capture=self._capture,None
+        if capture is not None:
+            try: capture.close()
+            except Exception as exc: raise CaptureBackendError("Unable to close screen capture backend.") from exc
