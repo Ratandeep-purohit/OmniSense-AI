@@ -117,9 +117,9 @@ def test_verification_stage_is_reachable() -> None:
     result = pipeline(enabled=True).run(
         snapshot(),
         "wait",
-        evidence=VerificationEvidence(
-            context_id="ctx-integration",
-            captured_at=datetime.now(timezone.utc),
+        evidence_provider=lambda execution: VerificationEvidence(
+            context_id=execution.context_id,
+            captured_at=execution.finished_at,
             visible_text="Ready",
             source="deterministic-test",
         ),
