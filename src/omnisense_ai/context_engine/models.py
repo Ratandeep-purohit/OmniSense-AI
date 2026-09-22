@@ -126,5 +126,17 @@ class ContextSnapshot:
         """Authorization is deliberately not represented by context."""
         return None
 
-    def is_fresh(self) -> bool:
-        return self.context.freshness is ContextFreshness.FRESH
+    def is_fresh(self, *, now: datetime | None = None, max_age_seconds: float = 5.0) -> bool:
+        if max_age_seconds <= 0:
+            raise ValueError("max_age_seconds must be positive.")
+        current = now or datetime.now(timezone.utc)
+        if current.tzinfo is None:
+            raise ValueError("now must be timezone-aware.")
+        age = max(0.0, (current - self.context.captured_at).total_seconds())
+        return age <= max_age_seconds
+
+    def age_seconds(self, *, now: datetime | None = None) -> float:
+        current = now or datetime.now(timezone.utc)
+        if current.tzinfo is None:
+            raise ValueError("now must be timezone-aware.")
+        return max(0.0, (current - self.context.captured_at).total_seconds())
