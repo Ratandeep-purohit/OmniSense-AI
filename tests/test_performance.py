@@ -89,3 +89,14 @@ def test_reset_and_close() -> None:
 def test_budget_order() -> None:
     monitor = PerformanceMonitor(PerformanceConfig(budgets={"z": StageBudget("z",1,2), "a": StageBudget("a",1,2)}))
     assert [item.stage for item in monitor.budgets()] == ["a", "z"]
+
+
+
+def test_disabled_monitor_rejects_collection() -> None:
+    from omnisense_ai.performance import PerformanceDisabledError
+
+    monitor = PerformanceMonitor(PerformanceConfig(enabled=False))
+    with pytest.raises(PerformanceDisabledError):
+        monitor.record("stage", 1)
+    with pytest.raises(PerformanceDisabledError):
+        monitor.snapshot()
