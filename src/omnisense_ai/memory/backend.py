@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from collections.abc import Protocol
-from datetime import datetime
+from datetime import datetime, timezone
 
-from .models import MemoryEntry, MemoryKind
+from .models import MemoryEntry, MemoryKind, MemoryStatus
 
 
 class MemoryBackend(Protocol):
@@ -19,6 +19,7 @@ class MemoryBackend(Protocol):
         limit: int = 10,
         now: datetime | None = None,
     ) -> tuple[MemoryEntry, ...]: ...
+    def list_active(self, *, now: datetime | None = None) -> tuple[MemoryEntry, ...]: ...
     def close(self) -> None: ...
 
 
@@ -54,13 +55,13 @@ class InMemoryMemoryBackend:
         now: datetime | None = None,
     ) -> tuple[MemoryEntry, ...]:
         self._ensure_open()
-        current = now or datetime.now()
+        current = now or datetime.now(timezone.utc)
         needle = query.casefold()
         matches = []
         for entry in self._entries.values():
             if entry.is_expired(now=current):
                 continue
-            if entry.status.value != "active":
+            if entry.status is not MemoryStatus.ACTIVE:
                 continue
             if kind is not None and entry.kind is not kind:
                 continue
@@ -69,6 +70,16 @@ class InMemoryMemoryBackend:
                 matches.append(entry)
         matches.sort(key=lambda item: item.updated_at, reverse=True)
         return tuple(matches[:limit])
+
+    def list_active(self, *, now: datetime | None = None) -> tuple[MemoryEntry, ...]:
+        self._ensure_open()
+        current = now or datetime.now(timezone.utc)
+        entries = tuple(
+            entry
+            for entry in self._entries.values()
+            if entry.status is MemoryStatus.ACTIVE and not entry.is_expired(now=current)
+        )
+        return tuple(sorted(entries, key=lambda item: item.updated_at, reverse=True))
 
     def close(self) -> None:
         self._closed = True
