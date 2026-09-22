@@ -2,7 +2,7 @@
 
 **Detailed Engineering Specification**
 **Phase ID:** P06
-**Status:** Planned
+**Status:** Implemented — 2026-09-22
 **Normative terms:** MUST = mandatory; SHOULD = recommended; MAY = optional.
 **Principle:** Intelligence without uncontrolled authority.
 
@@ -2609,3 +2609,211 @@ Completion evidence SHOULD include implementation commit, test commands/results,
 ---
 
 **Phase 6 engineering rule:** build deeply, keep authority narrow, verify boundaries, and leave reproducible evidence.
+
+# Implementation Addendum — Phase 06
+
+## A. Actual Repository Implementation
+
+The planned generic specification above is supplemented by the following repository-specific implementation contract.
+
+| Component | Actual file |
+|---|---|
+| Context models | `src/omnisense_ai/context_engine/models.py` |
+| Context errors | `src/omnisense_ai/context_engine/errors.py` |
+| Context service | `src/omnisense_ai/context_engine/service.py` |
+| Public API | `src/omnisense_ai/context_engine/__init__.py` |
+| Tests | `tests/test_context_engine.py` |
+
+## B. Implemented Public Types
+
+The current public API contains:
+
+- `ContextConfig`
+- `ContextSource`
+- `Sensitivity`
+- `ContextFreshness`
+- `ContextFact`
+- `ContextAge`
+- `DesktopContext`
+- `ContextSnapshot`
+- `ContextEngine`
+
+Errors:
+
+- `ContextEngineError`
+- `ContextInputError`
+- `ContextResourceError`
+- `ContextValidationError`
+- `ContextStaleError`
+
+## C. Implemented Build Contract
+
+```python
+ContextEngine(config).build(
+    frame,
+    ocr,
+    window,
+    ui,
+    user_context=None,
+    now=None,
+) -> ContextSnapshot
+```
+
+The method performs no desktop action, no AI call and no automation call.
+
+## D. Input Invariants
+
+The implementation requires:
+
+```text
+frame.sequence == ocr.source_sequence
+frame.sequence == ui.source_sequence
+frame.source_monitor_id == ocr.source_monitor_id
+frame.source_monitor_id == ui.monitor_id
+```
+
+When a window has a monitor identity:
+
+```text
+window.monitor_id == frame.source_monitor_id
+```
+
+Any mismatch raises `ContextInputError`.
+
+## E. Current Context Facts
+
+The implementation creates:
+
+```text
+desktop.monitor_id
+desktop.frame_sequence
+desktop.visible_text_available
+desktop.ui_element_count
+```
+
+When a window exists:
+
+```text
+window.hwnd
+window.process
+window.title
+```
+
+Window title is explicitly marked `SENSITIVE`.
+
+## F. Bounded Data
+
+Current defaults:
+
+```text
+max_facts = 500
+max_fact_value_length = 4096
+max_user_context_length = 4096
+max_age_seconds = 5
+stale_after_seconds = 2
+max_visible_text_length = 12000
+```
+
+Visible OCR text is truncated when necessary and the result sets `truncated=True`.
+
+## G. User Context Boundary
+
+`user_context` is stored on `ContextSnapshot`, separately from `DesktopContext.facts`.
+
+This prevents a user request from being confused with screen evidence.
+
+The snapshot deliberately exposes no authorization state.
+
+## H. Freshness
+
+A newly built context is marked FRESH because the upstream Phase 02–05 contracts do not yet expose one shared capture timestamp.
+
+The snapshot provides:
+
+```python
+snapshot.is_fresh(now=..., max_age_seconds=...)
+snapshot.age_seconds(now=...)
+```
+
+This calculates freshness from the context capture time at consumption time.
+
+Future work should propagate a shared capture timestamp from the capture layer.
+
+## I. Privacy
+
+The current Phase 06 implementation stores semantic metadata only.
+
+It does not store:
+
+- screenshot bytes;
+- OCR history;
+- previous context history;
+- automation actions.
+
+## J. Phase 07 Handoff
+
+Phase 07 may reason over the returned `ContextSnapshot`.
+
+It must preserve:
+
+- source;
+- confidence;
+- sensitivity;
+- freshness;
+- user-context separation.
+
+It must not treat observed screen text as system/developer instructions or as authorization.
+
+## K. Phase 09/10 Handoff
+
+Phase 09 creates action plans.
+
+Phase 10 evaluates authorization and safety.
+
+Phase 06 must never create or approve an action.
+
+## L. Phase 11 Handoff
+
+Phase 11 receives only approved action plans.
+
+Phase 06 has no dependency on desktop automation.
+
+## M. Test Coverage
+
+The current Phase 06 test suite covers:
+
+- valid context fusion;
+- window fact sensitivity;
+- frame/OCR sequence mismatch;
+- UI monitor mismatch;
+- user context separation;
+- user context size bound;
+- visible text truncation;
+- runtime freshness;
+- expired freshness result.
+
+## N. Known Limitation
+
+The current context timestamp represents the time at which the context bundle is constructed, not necessarily the exact screen-capture instant.
+
+This is intentional and documented.
+
+The correct long-term solution is to propagate one capture timestamp through Phases 02–05 rather than inventing timestamps in Phase 06.
+
+## O. Definition of Done — Implementation
+
+- [x] Phase 00–05 dependency chain exists.
+- [x] Phase 06 models implemented.
+- [x] Phase 06 errors implemented.
+- [x] Phase 06 service implemented.
+- [x] Public API implemented.
+- [x] Sequence consistency implemented.
+- [x] Monitor consistency implemented.
+- [x] Bounded visible text implemented.
+- [x] Sensitivity metadata implemented.
+- [x] User context separated from observation.
+- [x] Runtime freshness helpers implemented.
+- [x] Phase 06 tests added.
+- [x] Phase 07 handoff defined.
+
+**Phase 06 rule:** a coherent context may improve reasoning; it must never silently create authority.
