@@ -13,3 +13,14 @@ def test_high_consequence_intent_is_blocked():
 def test_unknown_intent_does_not_create_action():
     p=ActionPlanner().plan(snapshot(),"Tell me what time it is"); assert p.status is PlanStatus.NEEDS_CLARIFICATION and not p.steps
 def test_plan_never_executes(): assert not hasattr(ActionPlanner(),"execute")
+
+
+def test_open_word_is_allowlisted_low_risk_plan():
+    plan = ActionPlanner().plan(snapshot(), "open Microsoft Word")
+    assert plan.status is PlanStatus.READY
+    assert plan.requires_confirmation is False
+    step = plan.steps[0]
+    assert step.action_type.value == "open_app"
+    params = dict(step.parameters)
+    assert params["app"] == "word"
+    assert step.expected_outcome == "app_is:WINWORD.EXE"
