@@ -8,12 +8,12 @@ from ..action_planning.service import ActionPlanner
 from ..action_verification.models import VerificationEvidence
 from ..action_verification.service import ActionVerificationService
 from ..context_engine.models import ContextSnapshot
-from ..desktop_automation.backend import DesktopAutomationBackend, NullDesktopAutomationBackend
+from ..desktop_automation.backend import NullDesktopAutomationBackend
 from ..desktop_automation.models import AutomationConfig, AutomationRequest
 from ..desktop_automation.service import DesktopAutomationService
 from ..safety_permission.service import SafetyPermissionEngine
 from ..security.service import SecurityService
-from .errors import IntegrationInputError, IntegrationStageError
+from .errors import IntegrationInputError
 from .models import PipelineResult, PipelineStatus, PipelineTrace
 
 
@@ -59,46 +59,26 @@ class OmniSensePipeline:
         try:
             plan = self.planner.plan(snapshot, sanitized_intent)
         except Exception as exc:
-            return PipelineResult(
-                PipelineStatus.BLOCKED,
-                snapshot.context.context_id,
-                sanitized_intent,
-                None,
-                None,
-                None,
-                None,
-                PipelineTrace(tuple(stages), "action_planning"),
-                f"{type(exc).__name__}: {exc}",
+            return self._result(
+                PipelineStatus.BLOCKED, snapshot, sanitized_intent, None, None, None, None,
+                stages, "action_planning", exc,
             )
         stages.append("action_planning")
 
         try:
             decision = self.safety.evaluate(plan, snapshot)
         except Exception as exc:
-            return PipelineResult(
-                PipelineStatus.BLOCKED,
-                snapshot.context.context_id,
-                sanitized_intent,
-                plan,
-                None,
-                None,
-                None,
-                PipelineTrace(tuple(stages + ["safety"]), "safety"),
-                f"{type(exc).__name__}: {exc}",
+            return self._result(
+                PipelineStatus.BLOCKED, snapshot, sanitized_intent, plan, None, None, None,
+                stages + ["safety"], "safety", exc,
             )
         stages.append("safety")
 
         if not decision.allowed:
             return PipelineResult(
-                PipelineStatus.BLOCKED,
-                snapshot.context.context_id,
-                sanitized_intent,
-                plan,
-                decision,
-                None,
-                None,
-                PipelineTrace(tuple(stages), "safety"),
-                decision.message,
+                PipelineStatus.BLOCKED, snapshot.context.context_id, sanitized_intent,
+                plan, decision, None, None,
+                PipelineTrace(tuple(stages), "safety"), decision.message,
             )
 
         try:
@@ -107,28 +87,16 @@ class OmniSensePipeline:
                 AutomationRequest(plan.plan_id, plan.context_id, decision),
             )
         except Exception as exc:
-            return PipelineResult(
-                PipelineStatus.FAILED,
-                snapshot.context.context.context_id,
-                sanitized_intent,
-                plan,
-                decision,
-                None,
-                None,
-                PipelineTrace(tuple(stages + ["desktop_automation"]), "desktop_automation"),
-                f"{type(exc).__name__}: {exc}",
+            return self._result(
+                PipelineStatus.FAILED, snapshot, sanitized_intent, plan, decision, None, None,
+                stages + ["desktop_automation"], "desktop_automation", exc,
             )
         stages.append("desktop_automation")
 
         if evidence is None:
             return PipelineResult(
-                PipelineStatus.NOT_VERIFIED,
-                snapshot.context.context_id,
-                sanitized_intent,
-                plan,
-                decision,
-                execution,
-                None,
+                PipelineStatus.NOT_VERIFIED, snapshot.context.context_id, sanitized_intent,
+                plan, decision, execution, None,
                 PipelineTrace(tuple(stages), "verification"),
                 "Post-execution evidence is required for verification.",
             )
@@ -136,31 +104,45 @@ class OmniSensePipeline:
         try:
             verification = self.verification.verify(plan, execution, evidence, now=current)
         except Exception as exc:
-            return PipelineResult(
-                PipelineStatus.NOT_VERIFIED,
-                snapshot.context.context_id,
-                sanitized_intent,
-                plan,
-                decision,
-                execution,
-                None,
-                PipelineTrace(tuple(stages + ["verification"]), "verification"),
-                f"{type(exc).__name__}: {exc}",
+            return self._result(
+                PipelineStatus.NOT_VERIFIED, snapshot, sanitized_intent, plan, decision,
+                execution, None, stages + ["verification"], "verification", exc,
             )
         stages.append("verification")
 
-        if verification.status.value == "verified":
-            status = PipelineStatus.COMPLETED
-        else:
-            status = PipelineStatus.NOT_VERIFIED
+        status = (
+            PipelineStatus.COMPLETED
+            if verification.status.value == "verified"
+            else PipelineStatus.NOT_VERIFIED
+        )
+        return PipelineResult(
+            status, snapshot.context.context_id, sanitized_intent,
+            plan, decision, execution, verification,
+            PipelineTrace(tuple(stages)),
+            "Pipeline completed and verification was evaluated.",
+        )
+
+    @staticmethod
+    def _result(
+        status: PipelineStatus,
+        snapshot: ContextSnapshot,
+        intent: str,
+        plan,
+        decision,
+        execution,
+        verification,
+        stages: list[str],
+        blocked_at: str,
+        exc: Exception,
+    ) -> PipelineResult:
         return PipelineResult(
             status,
             snapshot.context.context_id,
-            sanitized_intent,
+            intent,
             plan,
             decision,
             execution,
             verification,
-            PipelineTrace(tuple(stages)),
-            "Pipeline completed and verification was evaluated.",
+            PipelineTrace(tuple(stages), blocked_at),
+            f"{type(exc).__name__}: {exc}",
         )
