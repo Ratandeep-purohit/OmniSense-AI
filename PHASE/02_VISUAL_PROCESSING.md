@@ -2,7 +2,7 @@
 
 **Detailed Engineering Specification**
 **Phase ID:** P02
-**Status:** Planned
+**Status:** Implementation Complete
 **Normative terms:** MUST = mandatory; SHOULD = recommended; MAY = optional.
 **Principle:** Intelligence without uncontrolled authority.
 
@@ -2609,3 +2609,54 @@ Completion evidence SHOULD include implementation commit, test commands/results,
 ---
 
 **Phase 2 engineering rule:** build deeply, keep authority narrow, verify boundaries, and leave reproducible evidence.
+
+## 29.1 Actual Repository Implementation
+
+Phase 2 is implemented as a deterministic, dependency-light processing layer over the Phase 1 `ScreenFrame` contract.
+
+| Contract | Implementation |
+|---|---|
+| Input validation | `visual_processing/processor.py` |
+| BGRA → RGB conversion | `VisualProcessor._bgra_to_rgb` |
+| Bounded resize | `VisualProcessor._resize_rgb` |
+| Canonical normalization | `VisualProcessor._normalize_rgb` |
+| Brightness/contrast quality | `VisualProcessor._quality` |
+| Change detection | `VisualProcessor._signature` + `_change_score` |
+| Typed failures | `visual_processing/errors.py` |
+| Stable data contracts | `visual_processing/models.py` |
+| Public API | `visual_processing/__init__.py` |
+| Automated verification | `tests/test_visual_processing.py` |
+
+### Phase 2 processing contract
+
+```text
+ScreenFrame (Phase 1)
+       ↓
+Validate BGRA + dimensions + byte length
+       ↓
+BGRA → RGB24
+       ↓
+Bounded nearest-neighbour resize
+       ↓
+Canonical RGB representation
+       ↓
+Brightness + contrast quality assessment
+       ↓
+16×16 luminance signature
+       ↓
+Change score against previous frame
+       ↓
+VisualFrame
+```
+
+The processor keeps no screenshot archive. Only the small previous-frame signature is retained for change detection. No OCR, AI/VLM inference, window control, mouse/keyboard automation, or external network calls are performed by Phase 2.
+
+### Verification
+
+From the repository root:
+
+```powershell
+python -m pytest
+```
+
+Phase 2 unit tests cover conversion, resizing, quality classification, change detection, invalid format rejection, malformed frame rejection, and processor reset.
