@@ -337,13 +337,13 @@ class OmniSenseWindow(QMainWindow):
         self._history.setReadOnly(True)
         self._history.setPlainText(
             "OmniSense AI\n"
-            "────────────────────────────────────────\n"
-            "Ready. Try:\n"
-            "  • open Microsoft Word\n"
-            "  • open Notepad\n"
-            "  • open Calculator\n\n"
-            "Automation is OFF by default. The first executable request asks for "
-            "explicit permission to enable desktop control."
+            "Ready for a desktop task.\n\n"
+            "Try:\n"
+            "• Open Microsoft Word\n"
+            "• Open Notepad\n"
+            "• Open Calculator\n\n"
+            "Automation is off by default. The first executable request will ask "
+            "for explicit permission to control the desktop."
         )
         shell_layout.addWidget(self._history, 1)
 
@@ -542,7 +542,8 @@ class OmniSenseWindow(QMainWindow):
                 QMessageBox.StandardButton.No,
             )
             if choice is not QMessageBox.StandardButton.Yes:
-                self._append_chat("OmniSense", "Request cancelled. Automation remains disabled.")
+                self._input.clear()
+                self.statusBar().showMessage("Request cancelled — automation remains disabled")
                 return
             self._automation_check.blockSignals(True)
             self._automation_check.setChecked(True)
