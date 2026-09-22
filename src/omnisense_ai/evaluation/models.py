@@ -92,5 +92,6 @@ class EvaluationReport:
             raise ValueError("generated_at must be timezone-aware.")
         if min(self.passed, self.failed, self.errored, self.skipped) < 0:
             raise ValueError("Evaluation counts cannot be negative.")
-        if self.passed + self.failed + self.errored + self.skipped != len(self.results):
-            raise ValueError("Evaluation counts must match result count.")
+        executed = self.passed + self.failed + self.errored
+        if executed != len(self.results):
+            raise ValueError("Executed evaluation counts must match result count.")
