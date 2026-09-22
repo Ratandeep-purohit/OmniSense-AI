@@ -1,0 +1,15 @@
+from datetime import datetime,timezone
+import pytest
+from omnisense_ai.context_engine import ContextAge,ContextFreshness,ContextSnapshot,DesktopContext
+from omnisense_ai.action_planning import ActionPlanner,ActionPlanAmbiguityError,ActionPlanSecurityError,PlanStatus
+def snapshot():
+    now=datetime.now(timezone.utc); c=DesktopContext("ctx-plan",now,"primary",1,ContextFreshness.FRESH,ContextAge(now,0,ContextFreshness.FRESH),(),"Open Settings",None,"test-app","Settings",0,0,("test",)); return ContextSnapshot(context=c)
+def test_click_plan_is_ready():
+    p=ActionPlanner().plan(snapshot(),"Click the Save button"); assert p.status is PlanStatus.READY and len(p.steps)==1 and p.requires_confirmation
+def test_ambiguous_intent_requires_clarification():
+    with pytest.raises(ActionPlanAmbiguityError): ActionPlanner().plan(snapshot(),"Maybe do something")
+def test_high_consequence_intent_is_blocked():
+    with pytest.raises(ActionPlanSecurityError): ActionPlanner().plan(snapshot(),"Delete this file")
+def test_unknown_intent_does_not_create_action():
+    p=ActionPlanner().plan(snapshot(),"Tell me what time it is"); assert p.status is PlanStatus.NEEDS_CLARIFICATION and not p.steps
+def test_plan_never_executes(): assert not hasattr(ActionPlanner(),"execute")
