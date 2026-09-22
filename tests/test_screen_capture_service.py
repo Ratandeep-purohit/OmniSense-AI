@@ -181,4 +181,12 @@ def test_state_transitions_pause_resume_stop_start_and_cleanup() -> None:
 
     with pytest.raises(CaptureNotActiveError):
         service.capture_selected_monitor()
-\n\ndef test_capture_rate_limit_is_enforced():\n    service = ScreenCaptureService(FakeBackend(), enabled_config(interval_ms=1000, max_fps=10.0))\n    service.start()\n    service.capture_selected_monitor()\n    from omnisense_ai.screen_capture import CaptureRateLimitError\n    with pytest.raises(CaptureRateLimitError):\n        service.capture_selected_monitor()\n
+
+
+def test_capture_rate_limit_is_enforced():
+    service = ScreenCaptureService(FakeBackend(), enabled_config(interval_ms=1000, max_fps=10.0))
+    service.start()
+    service.capture_selected_monitor()
+    from omnisense_ai.screen_capture import CaptureRateLimitError
+    with pytest.raises(CaptureRateLimitError):
+        service.capture_selected_monitor()
