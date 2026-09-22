@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Callable
 
 from ..action_planning.service import ActionPlanner
 from ..action_verification.models import VerificationEvidence
 from ..action_verification.service import ActionVerificationService
 from ..context_engine.models import ContextSnapshot
 from ..desktop_automation.backend import NullDesktopAutomationBackend
-from ..desktop_automation.models import AutomationConfig, AutomationRequest
+from ..desktop_automation.models import AutomationConfig, AutomationRequest, AutomationResult
 from ..desktop_automation.service import DesktopAutomationService
 from ..safety_permission.service import SafetyPermissionEngine
 from ..security.service import SecurityService
@@ -44,6 +45,7 @@ class OmniSensePipeline:
         intent: str,
         *,
         evidence: VerificationEvidence | None = None,
+        evidence_provider: Callable[[AutomationResult], VerificationEvidence] | None = None,
         now: datetime | None = None,
     ) -> PipelineResult:
         current = now or datetime.now(timezone.utc)
@@ -51,6 +53,8 @@ class OmniSensePipeline:
             raise IntegrationInputError("now must be timezone-aware.")
         if not intent or not intent.strip():
             raise IntegrationInputError("Pipeline intent is required.")
+        if evidence is not None and evidence_provider is not None:
+            raise IntegrationInputError("Provide evidence or evidence_provider, not both.")
 
         stages = ["context"]
         sanitized_intent = self.security.inspect_text(intent).sanitized_text
@@ -92,6 +96,21 @@ class OmniSensePipeline:
                 stages + ["desktop_automation"], "desktop_automation", exc,
             )
         stages.append("desktop_automation")
+
+        if evidence_provider is not None:
+            try:
+                evidence = evidence_provider(execution)
+            except Exception as exc:
+                return self._result(
+                    PipelineStatus.NOT_VERIFIED, snapshot, sanitized_intent, plan, decision,
+                    execution, None, stages + ["verification"], "verification", exc,
+                )
+            if not isinstance(evidence, VerificationEvidence):
+                return self._result(
+                    PipelineStatus.NOT_VERIFIED, snapshot, sanitized_intent, plan, decision,
+                    execution, None, stages + ["verification"], "verification",
+                    IntegrationInputError("evidence_provider must return VerificationEvidence."),
+                )
 
         if evidence is None:
             return PipelineResult(
