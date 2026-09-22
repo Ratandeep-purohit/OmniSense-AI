@@ -797,8 +797,7 @@ The shutdown predictability property MUST have a reviewable implementation chara
 | Field | Requirement |
 |---|---|
 | schema_version | Explicit contract version |
-| correlation_id | Correlates related operations |
-| timestamp | Consistent format |
+| correlation_id | Correlates related operations || timestamp | Consistent format |
 | status | Explicit outcome |
 | payload | Phase-relevant data only |
 | provenance | Source/transformation |
@@ -1597,7 +1596,6 @@ Identify the enforcement point, failure behavior and automated test for path saf
 ### SEC-023 — content isolation
 
 Identify the enforcement point, failure behavior and automated test for content isolation.
-
 ### SEC-024 — rate limiting
 
 Identify the enforcement point, failure behavior and automated test for rate limiting.
@@ -2397,8 +2395,7 @@ Stop at the nearest safe boundary, classify the failure, preserve diagnostic con
 - [ ] 26. shutdown
 - [ ] 27. versioning
 - [ ] 28. compatibility
-- [ ] 29. migration
-- [ ] 30. rollback
+- [ ] 29. migration- [ ] 30. rollback
 - [ ] 31. diagnostics
 - [ ] 32. fixtures
 - [ ] 33. no unsafe globals
@@ -2800,3 +2797,209 @@ O --> N[Next Phase]
 - Engineering question 70: What is the contract, enforcement point, failure behavior, evidence, security implication and rollback/recovery path for this phase concern?
 
 .
+
+# Phase 14 Implementation Addendum — Actual Repository Contract
+
+> This addendum is authoritative for the implementation that exists in main. The earlier specification text is preserved intentionally; this section records the concrete repository mapping and implemented behavior.
+
+## 1. Phase identity
+
+- Phase: 14 — Performance
+- Role: cross-cutting observability and bounded performance measurement
+- Source package: src/omnisense_ai/performance/
+- Tests: tests/test_performance.py
+- Storage: process-local memory only
+- Default: enabled, bounded, non-authoritative
+
+## 2. Repository layout
+
+src/omnisense_ai/performance/
+- __init__.py — public exports
+- models.py — immutable contracts and statistics
+- errors.py — typed performance failures
+- service.py — measurement, aggregation, and benchmark service
+
+Phase 14 deliberately uses an architectural package named performance rather than a phase_14 source directory. Roadmap phases and source responsibilities remain separate.
+
+## 3. Core principle
+
+Phase 14 observes execution. It does not grant authority, execute desktop actions, approve plans, modify memory, capture screenshots, retain OCR content, or retry side effects.
+
+Pipeline relationship:
+
+Capture -> Visual Processing -> OCR -> Context -> AI -> Planning -> Safety -> Automation -> Verification -> Memory
+                         |                                                            |
+                         +---------------- Performance observation ------------------+
+
+Performance is a side-channel for measurement, never an authority stage.
+
+## 4. Implemented models
+
+PerformanceStatus has HEALTHY, WARNING, and BREACHED states.
+
+StageBudget contains a stage name, warning latency in milliseconds, and failure latency in milliseconds. Both limits are non-negative and warning must not exceed failure.
+
+PerformanceConfig contains enabled, max_samples, max_stage_name_length, default_warning_ms, default_failure_ms, and a mapping of stage-specific budgets. Defaults are 5000 retained samples, 80-character stage names, 100 ms warning, and 500 ms failure.
+
+PerformanceSample contains only stage, duration_ms, success, and a timezone-aware recorded_at timestamp. It contains no screen, OCR, model, user, credential, or authorization data.
+
+StageStats contains count, failures, min, mean, p50, p95, p99, max, and derived status.
+
+PerformanceReport contains a UTC-aware generation time, retained sample count, deterministic stage ordering, immutable stage statistics, and aggregate status.
+
+## 5. Measurement semantics
+
+record(stage, duration_ms, success=True) validates inputs and appends an immutable sample to a bounded deque.
+
+measure(stage) is a context manager. It uses a monotonic performance counter, records success on normal completion, records failure when the body raises, and re-raises the original exception.
+
+timed(stage, operation) executes a callable under measurement and returns exactly the callable result. It does not modify the callable or swallow exceptions.
+
+benchmark(operation, iterations, warmups) runs a bounded developer benchmark. Warmups are excluded from reported iteration count. Failed iterations are counted and timing continues so the result describes the requested bounded run.
+
+## 6. Timing model
+
+Elapsed duration uses Python perf_counter rather than wall-clock time. This prevents clock adjustments from corrupting duration measurements.
+
+Recorded timestamps use timezone-aware UTC datetime values. These two clocks have different responsibilities: monotonic time measures duration; UTC time identifies when the observation was recorded.
+
+## 7. Statistics and budgets
+
+For each stage, p50, p95, and p99 are exposed. The aggregate stage status is:
+
+- BREACHED when p99 exceeds failure_ms or any retained sample failed.
+- WARNING when p99 exceeds warning_ms but does not breach failure_ms and no sample failed.
+- HEALTHY otherwise.
+
+Stage-specific budgets override the default budget. The monitor sorts stage names before constructing reports, making output deterministic.
+
+The initial 100/500 ms thresholds are engineering defaults, not a claim of final production performance. Phase 16 must establish workload-specific evidence.
+
+## 8. Bounded retention
+
+Samples are held in deque(maxlen=max_samples). Once the bound is reached, the oldest observations are evicted automatically. There is no unbounded performance history and no disk or network exporter in Phase 14.
+
+This is important for a continuously running desktop agent: performance instrumentation must not become a memory leak.
+
+## 9. Lifecycle and disabled mode
+
+The monitor can be open or closed. Closing clears retained samples. Operations against a closed monitor are rejected.
+
+When PerformanceConfig.enabled is false, collection/reporting operations explicitly raise PerformanceDisabledError. The subsystem does not silently fabricate missing measurements.
+
+## 10. Thread safety
+
+PerformanceMonitor uses RLock for shared sample mutation, reset, close, and snapshot copying. Snapshot aggregation occurs after copying the retained sample set, limiting lock hold time.
+
+Concurrent recording is supported. Global ordering between independently executing threads is not promised.
+
+## 11. Error behavior
+
+PerformanceError is the subsystem root. PerformanceInputError handles invalid inputs and lifecycle misuse. PerformanceResourceError is reserved for resource-limit failures. PerformanceDisabledError represents explicit configuration disablement.
+
+Measurement MUST NOT replace an application's original exception with a telemetry exception. The original exception is re-raised after the failure sample is recorded.
+
+## 12. Privacy boundary
+
+Allowed sample data:
+- stage = stable architectural label
+- duration_ms = numeric latency
+- success = boolean
+- recorded_at = UTC timestamp
+
+Forbidden sample data:
+- screenshot bytes
+- OCR transcript
+- typed text
+- model prompt or response
+- secrets
+- authorization tokens
+- user-provided stage names
+
+Performance observations do not automatically enter Phase 13 Memory. Operational telemetry is not user memory.
+
+## 13. Safety boundary
+
+Phase 14 has no execute, approve, deny, confirm, retry, rollback, shell, subprocess, click, type, launch, close, or automation API.
+
+Phase 10 remains the authorization boundary. Phase 11 remains the execution boundary. Phase 12 remains the verification boundary.
+
+Performance results cannot downgrade or upgrade permission decisions and cannot authorize a second execution attempt.
+
+## 14. Optimization policy
+
+Phase 14 follows measure-before-optimize:
+
+Baseline -> Measure -> Identify dominant stage -> Change one variable -> Regression tests -> Re-measure -> Compare -> Accept or revert
+
+No optimization is accepted merely because it looks faster in code review. Functional correctness and safety remain mandatory gates.
+
+Likely CPU-sensitive areas already visible in the repository include VisualProcessor BGRA-to-RGB conversion, Python resize loops, luminance/quality calculation, signature calculation, OCR engine invocation, Windows window observation, and external AI/VLM latency. These are targets for measurement, not permission to change behavior blindly.
+
+## 15. Instrumentation policy
+
+Instrumentation should be placed at stable architectural boundaries rather than inside pixel loops, token loops, or every helper call. Excessive instrumentation can distort the very performance being measured.
+
+Recommended future stage labels are capture, visual_processing, ocr, window_detection, ui_understanding, context, ai_inference, assistant, planning, authorization, automation, verification, and memory.
+
+User text MUST NOT become a performance stage label because that creates high-cardinality telemetry and a privacy risk.
+
+## 16. Benchmark methodology
+
+Repeatable benchmarks should use representative fixed inputs, bounded warmups, bounded iterations, p50/p95/p99, failure counts, and the same runtime/environment for before-and-after comparison.
+
+Cold-start and steady-state measurements should be reported separately. External AI/provider wait should be separated from local CPU processing. A performance regression must be demonstrated with repeated evidence rather than a single noisy timing.
+
+Recommended future benchmark identifiers:
+- CAPTURE-B01
+- VIS-B01
+- VIS-B02
+- OCR-B01
+- WIN-B01
+- UI-B01
+- CTX-B01
+- AI-B01
+- PLAN-B01
+- SAFE-B01
+- AUTO-B01
+- VERIFY-B01
+- MEM-B01
+- E2E-B01
+
+## 17. Test contract
+
+tests/test_performance.py covers aggregation, mean and percentile statistics, warning and breach budgets, failed samples, successful and failing context-manager measurements, result preservation, bounded retention, invalid inputs, timezone validation, reset/close lifecycle, deterministic budget ordering, and bounded benchmark failures.
+
+Tests do not require a real desktop, PyAutoGUI, OCR engine, or external AI provider. This keeps Phase 14 deterministic and safe.
+
+## 18. Future integration requirements
+
+Phase 17 may instrument stable boundaries across the full lifecycle. It should keep performance assertions separate from functional assertions.
+
+Phase 16 should establish platform-specific baselines on Windows hardware, distinguish cold start from steady state, and measure CPU/memory alongside latency.
+
+Phase 15 should review telemetry privacy, configuration tampering, high-cardinality labels, future exporters, and resource-exhaustion risks.
+
+## 19. Acceptance criteria
+
+- Performance package exists as a bounded cross-cutting subsystem.
+- Contracts are immutable.
+- Sample retention is bounded.
+- Stage names are bounded.
+- Duration uses monotonic timing.
+- Timestamps are timezone-aware.
+- p50, p95, and p99 are available.
+- Warning/failure budgets are deterministic.
+- Measured exceptions are preserved.
+- Callable results are preserved.
+- Disabled mode is explicit.
+- No screenshot/OCR content is persisted.
+- No authorization or automation authority exists.
+- Tests cover positive, negative, boundary, and lifecycle behavior.
+- Existing phase behavior remains unchanged.
+
+## 20. Final rule
+
+Measure the system without changing what the system is allowed to do.
+
+Phase 14 makes optimization evidence-driven. It does not trade safety, verification, privacy, or authorization boundaries for speed.
