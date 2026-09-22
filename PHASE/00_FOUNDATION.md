@@ -2,7 +2,7 @@
 
 **Detailed Engineering Specification**
 **Phase ID:** P00
-**Status:** Complete
+**Status:** Implementation Complete
 **Normative terms:** MUST = mandatory; SHOULD = recommended; MAY = optional.
 **Principle:** Intelligence without uncontrolled authority.
 
@@ -2605,6 +2605,37 @@ Inputs, outputs, errors, lifecycle, resource ownership, configuration, security 
 ## 29. Engineering Evidence
 
 Completion evidence SHOULD include implementation commit, test commands/results, environment, benchmarks where relevant, security review, known limitations and unresolved risks. Another engineer MUST be able to reproduce verification.
+
+## 29.1 Actual Repository Implementation
+
+Phase 0 is implemented as executable foundation code in the repository, not only as a design document.
+
+| Contract area | Implementation |
+|---|---|
+| Configuration | `src/omnisense_ai/config.py` |
+| Typed application errors | `src/omnisense_ai/errors.py` |
+| Application bootstrap and health | `src/omnisense_ai/app.py` |
+| Runtime lifecycle | `src/omnisense_ai/runtime.py` |
+| Safe logging/redaction | `src/omnisense_ai/logging_config.py` |
+| Correlation and telemetry primitives | `src/omnisense_ai/telemetry.py` |
+| Public foundation API | `src/omnisense_ai/__init__.py` |
+| Automated verification | `tests/test_config.py`, `tests/test_errors.py`, `tests/test_runtime.py`, `tests/test_telemetry.py`, plus the existing Phase 1 capture tests |
+
+### Runtime boundary
+
+Phase 0 owns startup configuration, typed failures, lifecycle state, health reporting, logging, correlation metadata, and resource-independent foundation contracts. It MUST NOT silently start OCR, VLM inference, automation, persistence, or other future-phase authority.
+
+### Verification command
+
+From the repository root:
+
+```powershell
+python -m pytest
+python -m omnisense_ai
+```
+
+The real desktop capture integration remains explicitly opt-in; the foundation does not enable capture merely because the package starts.
+
 
 ---
 
