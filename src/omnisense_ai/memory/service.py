@@ -17,7 +17,6 @@ from .models import (
     MemoryConfig,
     MemoryEntry,
     MemoryKind,
-    MemoryQuery,
     MemoryResult,
     MemorySensitivity,
     MemoryStatus,
@@ -80,7 +79,7 @@ class MemoryService:
                 status=MemoryStatus.ACTIVE,
                 provenance=tuple(provenance),
             )
-            if existing is None and self._count() >= self.config.max_entries:
+            if existing is None and self._count(current) >= self.config.max_entries:
                 raise MemoryResourceError("Memory entry limit reached.")
             self.backend.put(entry)
             return entry
@@ -119,26 +118,17 @@ class MemoryService:
             self.backend.delete(memory_id)
 
     def clear(self) -> None:
-        """Delete all currently stored memory entries."""
         self._ensure_enabled()
         with self._lock:
-            entries = self.recall_all()
-            for entry in entries:
+            for entry in self.backend.list_active():
                 self.backend.delete(entry.memory_id)
 
-    def recall_all(self) -> tuple[MemoryEntry, ...]:
+    def recall_all(self, *, now: datetime | None = None) -> tuple[MemoryEntry, ...]:
         self._ensure_enabled()
+        current = self._now(now)
         with self._lock:
-            # Backend search is intentionally query based; empty query is not exposed.
-            result = []
-            for key in ("",):
-                del key
-            if isinstance(self.backend, InMemoryMemoryBackend):
-                result.extend(
-                    entry for entry in self.backend._entries.values()
-                    if entry.status is MemoryStatus.ACTIVE
-                )
-            return tuple(sorted(result, key=lambda item: item.updated_at, reverse=True))
+            self._purge_expired(current)
+            return self.backend.list_active(now=current)
 
     def close(self) -> None:
         with self._lock:
@@ -148,25 +138,24 @@ class MemoryService:
 
     def _find_same_key(self, kind: MemoryKind, key: str) -> MemoryEntry | None:
         if isinstance(self.backend, InMemoryMemoryBackend):
-            for entry in self.backend._entries.values():
+            for entry in self.backend.list_active():
                 if entry.kind is kind and entry.key.casefold() == key.strip().casefold():
                     return entry
+            return None
+        # Generic backends can expose exact matching through search.
+        matches = self.backend.search(key.strip(), kind=kind, limit=self.config.max_results)
+        for entry in matches:
+            if entry.key.casefold() == key.strip().casefold():
+                return entry
         return None
 
     def _purge_expired(self, now: datetime) -> None:
-        if isinstance(self.backend, InMemoryMemoryBackend):
-            expired = [
-                entry.memory_id
-                for entry in self.backend._entries.values()
-                if entry.is_expired(now=now)
-            ]
-            for memory_id in expired:
-                self.backend.delete(memory_id)
+        for entry in self.backend.list_active(now=now):
+            if entry.is_expired(now=now):
+                self.backend.delete(entry.memory_id)
 
-    def _count(self) -> int:
-        if isinstance(self.backend, InMemoryMemoryBackend):
-            return len(self.backend._entries)
-        return 0
+    def _count(self, now: datetime) -> int:
+        return len(self.backend.list_active(now=now))
 
     def _ensure_enabled(self) -> None:
         if self._closed:
