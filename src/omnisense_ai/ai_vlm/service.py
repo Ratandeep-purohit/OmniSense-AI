@@ -14,7 +14,7 @@ class AIVLMService:
         operation=new_operation("ai_vlm"); started=monotonic()
         if not self.config.enabled: raise AISecurityError("AI/VLM integration is disabled by configuration.")
         if not instruction.strip(): raise AIValidationError("Instruction must not be empty.")
-        if not snapshot.is_fresh(max_age_seconds=self.config.timeout_seconds): raise AIValidationError("Context is stale and must be refreshed before AI reasoning.")
+        if not snapshot.is_fresh(max_age_seconds=5.0): raise AIValidationError("Context is stale and must be refreshed before AI reasoning.")
         if visual_data is not None and not self.config.allow_visual_input: raise AISecurityError("Visual input is disabled by configuration.")
         observed=self._build_observed_context(snapshot)
         if len(observed)+len(instruction)>self.config.max_input_chars: raise AIValidationError("AI input exceeds configured character limit.")
