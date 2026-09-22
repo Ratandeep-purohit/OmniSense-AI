@@ -8,7 +8,7 @@ from .action_verification.models import VerificationEvidence
 from .config import CaptureConfig
 from .context_engine.models import ContextSnapshot
 from .context_engine.service import ContextEngine
-from .desktop_automation.backend import WindowsDesktopBackend
+from .desktop_automation.backend import NullDesktopAutomationBackend, WindowsDesktopBackend
 from .desktop_automation.models import AutomationConfig, AutomationResult
 from .desktop_automation.service import DesktopAutomationService
 from .integration.models import PipelineResult
@@ -42,14 +42,30 @@ class DesktopProductRuntime:
         )
         self.windows = WindowDetectionService()
         self.context_engine = ContextEngine()
+        self.automation_enabled = False
         self.automation = DesktopAutomationService(
             AutomationConfig(
-                enabled=True,
+                enabled=False,
                 allowed_apps=frozenset(
                     {"word", "excel", "powerpoint", "notepad", "calculator"}
                 ),
             ),
-            WindowsDesktopBackend(),
+            NullDesktopAutomationBackend(),
+        )
+        self.pipeline = OmniSensePipeline(automation=self.automation)
+
+    def set_automation_enabled(self, enabled: bool) -> None:
+        self.automation.close()
+        self.automation_enabled = enabled
+        backend = WindowsDesktopBackend() if enabled else NullDesktopAutomationBackend()
+        self.automation = DesktopAutomationService(
+            AutomationConfig(
+                enabled=enabled,
+                allowed_apps=frozenset(
+                    {"word", "excel", "powerpoint", "notepad", "calculator"}
+                ),
+            ),
+            backend,
         )
         self.pipeline = OmniSensePipeline(automation=self.automation)
 
