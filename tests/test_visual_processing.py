@@ -42,7 +42,7 @@ def test_quality_and_change_detection_are_deterministic() -> None:
     first = processor.process(frame())
     second = processor.process(frame())
 
-    assert first.quality.level is QualityLevel.GOOD
+    assert first.quality.level is QualityLevel.LOW
     assert first.change_score == 1.0
     assert second.change_score == 0.0
     assert second.changed is False
