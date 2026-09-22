@@ -15,6 +15,17 @@ _SECRET_PATTERNS: tuple[Pattern[str], ...] = (
     re_compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
     re_compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
 )
+_SENSITIVE_METADATA_KEYS = frozenset({
+    "api_key",
+    "apikey",
+    "access_token",
+    "refresh_token",
+    "token",
+    "password",
+    "passwd",
+    "secret",
+    "credential",
+})
 _CONTROL_PATTERN = re_compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _IDENTIFIER_PATTERN = re_compile(r"^[A-Za-z0-9._:/@+\-]+$")
 
@@ -45,7 +56,14 @@ class SecurityService:
             reasons.append("control_characters_removed")
         if redacted:
             reasons.append("secrets_redacted")
-        return SecurityInspection(SecurityStatus.SAFE, original_length, sanitized, redacted, tuple(reasons), datetime.now(timezone.utc))
+        return SecurityInspection(
+            SecurityStatus.SAFE,
+            original_length,
+            sanitized,
+            redacted,
+            tuple(reasons),
+            datetime.now(timezone.utc),
+        )
 
     def validate_identifier(self, value: str) -> str:
         self._ensure_enabled()
@@ -90,7 +108,10 @@ class SecurityService:
                 raise SecurityInputError("Metadata values must be text.")
             if len(value) > self.config.max_metadata_value_length:
                 raise SecurityPolicyError("Metadata value exceeds the configured length limit.")
-            sanitized[safe_key] = self.inspect_text(value).sanitized_text
+            if self.config.redact_secrets and safe_key.lower().replace("-", "_") in _SENSITIVE_METADATA_KEYS:
+                sanitized[safe_key] = "[REDACTED]"
+            else:
+                sanitized[safe_key] = self.inspect_text(value).sanitized_text
         return sanitized
 
     def close(self) -> None:
