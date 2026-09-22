@@ -216,6 +216,15 @@ class OmniSenseWindow(QMainWindow):
         self.statusBar().showMessage("Ready  •  Local runtime  •  Automation disabled")
         self.show_page("overview")
 
+    def show_page(self, key: str) -> None:
+        """Switch the visible workspace page and keep sidebar state in sync."""
+        if key not in self._pages:
+            raise KeyError(f"Unknown UI page: {key}")
+
+        self.stack.setCurrentWidget(self._pages[key])
+        for button, (_, button_key) in zip(self._nav_buttons, self.NAV):
+            button.setChecked(button_key == key)
+
     def _make_pages(self) -> dict[str, QWidget]:
         return {
             "overview": self._overview_page(),
