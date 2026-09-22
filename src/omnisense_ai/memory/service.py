@@ -150,7 +150,7 @@ class MemoryService:
         return None
 
     def _purge_expired(self, now: datetime) -> None:
-        for entry in self.backend.list_active(now=now):
+        for entry in self.backend.list_entries():
             if entry.is_expired(now=now):
                 self.backend.delete(entry.memory_id)
 
