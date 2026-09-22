@@ -41,6 +41,7 @@ class PerformanceMonitor:
     def record(self, stage: str, duration_ms: float, *, success: bool = True,
                recorded_at: datetime | None = None) -> PerformanceSample:
         self._ensure_open()
+        self._ensure_enabled()
         normalized = self._validate_stage(stage)
         try:
             duration = float(duration_ms)
@@ -58,6 +59,7 @@ class PerformanceMonitor:
     @contextmanager
     def measure(self, stage: str) -> Iterator[None]:
         self._ensure_open()
+        self._ensure_enabled()
         normalized = self._validate_stage(stage)
         started = perf_counter()
         success = True
@@ -77,6 +79,7 @@ class PerformanceMonitor:
 
     def snapshot(self, *, now: datetime | None = None) -> PerformanceReport:
         self._ensure_open()
+        self._ensure_enabled()
         current = now or datetime.now(timezone.utc)
         if current.tzinfo is None or current.utcoffset() is None:
             raise PerformanceInputError("now must be timezone-aware.")
@@ -96,6 +99,8 @@ class PerformanceMonitor:
         return PerformanceReport(current, len(samples), stages, status)
 
     def benchmark(self, operation: Callable[[], object], *, iterations: int = 10, warmups: int = 1) -> BenchmarkResult:
+        self._ensure_open()
+        self._ensure_enabled()
         if not callable(operation):
             raise PerformanceInputError("operation must be callable.")
         if iterations < 1 or warmups < 0 or iterations > self.config.max_samples or warmups > self.config.max_samples:
@@ -121,6 +126,7 @@ class PerformanceMonitor:
 
     def budgets(self) -> tuple[StageBudget, ...]:
         self._ensure_open()
+        self._ensure_enabled()
         return tuple(sorted(self.config.budgets.values(), key=lambda item: item.stage))
 
     def reset(self) -> None:
@@ -147,3 +153,7 @@ class PerformanceMonitor:
     def _ensure_open(self) -> None:
         if self._closed:
             raise PerformanceInputError("Performance monitor is closed.")
+
+    def _ensure_enabled(self) -> None:
+        if not self.config.enabled:
+            raise PerformanceDisabledError("Performance monitoring is disabled.")
