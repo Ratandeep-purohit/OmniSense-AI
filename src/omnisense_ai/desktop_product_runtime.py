@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 
 from .action_verification.models import VerificationEvidence
@@ -15,6 +16,7 @@ from .integration.models import PipelineResult
 from .integration.service import OmniSensePipeline
 from .ocr.models import OCRQuality, OCRResult
 from .screen_capture.backend import MssScreenCaptureBackend
+from .screen_capture.models import MonitorInfo
 from .screen_capture.service import ScreenCaptureService
 from .ui_understanding.models import UIUnderstandingResult
 from .visual_processing.models import ProcessingConfig
@@ -71,9 +73,22 @@ class DesktopProductRuntime:
 
     def snapshot(self) -> ContextSnapshot:
         self.capture.start()
-        captured = self.capture.capture_selected_monitor()
-        visual = self.visual.process(captured)
+
+        # MSS monitor IDs are stable within the capture service (for example
+        # "1"), while Win32 window detection currently exposes an HMONITOR
+        # handle. Those identifiers are different namespaces. Resolve the
+        # active window to the capture monitor using virtual-screen geometry
+        # before building the context so Phase 6 receives consistent evidence.
         window = self._safe_window()
+        monitor = self._monitor_for_window(window)
+        captured = self.capture.capture_region(monitor.region, monitor.id)
+        visual = self.visual.process(captured)
+
+        # Rebind the observed window to the capture service's monitor ID.
+        # The WindowInfo contract is frozen, so replace() creates a validated
+        # copy without mutating the Phase 4 observation.
+        window = self._align_window_monitor(window, monitor.id)
+
         ocr = self._optional_ocr(visual)
         ui = UIUnderstandingResult(
             elements=(),
@@ -125,6 +140,48 @@ class DesktopProductRuntime:
             return self.windows.detect_active_window()
         except Exception:
             return WindowDetectionResult.empty("windows")
+
+    def _monitor_for_window(self, window: WindowDetectionResult) -> MonitorInfo:
+        monitors = tuple(self.capture.enumerate_monitors())
+        if not monitors:
+            raise RuntimeError("No display monitors are available.")
+
+        if window.window is None:
+            return next((m for m in monitors if m.is_primary), monitors[0])
+
+        rect = window.window.rect
+
+        # Windows chooses a window's monitor using the largest intersection
+        # with the window rectangle. Match that behavior rather than relying
+        # on the HMONITOR handle string exposed by Phase 4.
+        best_monitor = None
+        best_area = 0
+        for monitor in monitors:
+            left = max(rect.left, monitor.x)
+            top = max(rect.top, monitor.y)
+            right = min(rect.right, monitor.x + monitor.width)
+            bottom = min(rect.bottom, monitor.y + monitor.height)
+            area = max(0, right - left) * max(0, bottom - top)
+            if area > best_area:
+                best_area = area
+                best_monitor = monitor
+
+        if best_monitor is not None:
+            return best_monitor
+        return next((m for m in monitors if m.is_primary), monitors[0])
+
+    @staticmethod
+    def _align_window_monitor(
+        window: WindowDetectionResult, monitor_id: str
+    ) -> WindowDetectionResult:
+        if window.window is None or window.window.monitor_id == monitor_id:
+            return window
+
+        return WindowDetectionResult(
+            window=replace(window.window, monitor_id=monitor_id),
+            detected_at=window.detected_at,
+            backend=window.backend,
+        )
 
     @staticmethod
     def _optional_ocr(visual):
