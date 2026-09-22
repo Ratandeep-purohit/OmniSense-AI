@@ -2,7 +2,7 @@
 
 **Detailed Engineering Specification**
 **Phase ID:** P04
-**Status:** Planned
+**Status:** Implemented (2026-09-22)
 **Normative terms:** MUST = mandatory; SHOULD = recommended; MAY = optional.
 **Principle:** Intelligence without uncontrolled authority.
 
@@ -2561,6 +2561,58 @@ Every dependency MUST have a purpose, supported version range, license compatibi
 - Dependency review 23: necessity, version, license, advisories, compatibility, resource cost, maintenance and failure behavior.
 - Dependency review 24: necessity, version, license, advisories, compatibility, resource cost, maintenance and failure behavior.
 - Dependency review 25: necessity, version, license, advisories, compatibility, resource cost, maintenance and failure behavior.
+
+## 24A. Repository Implementation Status
+
+Phase 04 is implemented as a read-only Windows foreground-window observation boundary.
+
+### Implemented repository components
+
+| Path | Responsibility |
+|---|---|
+| `src/omnisense_ai/window_detection/models.py` | Window rectangle, window metadata, detection result contracts |
+| `src/omnisense_ai/window_detection/errors.py` | Typed Phase 04 failures |
+| `src/omnisense_ai/window_detection/backend.py` | Windows User32/Kernel32 observation adapter |
+| `src/omnisense_ai/window_detection/service.py` | Thread-safe service boundary and error mapping |
+| `src/omnisense_ai/window_detection/__init__.py` | Public package API |
+| `tests/test_window_detection.py` | Contract, service, failure and timestamp tests |
+
+### Runtime flow
+
+```text
+Windows desktop
+    |
+    +--> GetForegroundWindow()
+    |
+    +--> Window title
+    +--> Window rectangle
+    +--> Process ID
+    +--> Process executable metadata (best effort)
+    +--> Visibility / minimized state
+    +--> Monitor correlation
+    |
+    v
+WindowInfo
+    |
+    v
+WindowDetectionResult
+```
+
+### Authority boundary
+
+Phase 04 is observation-only. It MUST NOT focus, activate, move, resize, close, minimize, maximize, type into, click, or otherwise control a window. It does not interpret window text as an instruction and does not authorize any future action.
+
+### Windows behavior
+
+The backend uses native Windows APIs through `ctypes`, so Phase 04 does not add a third-party automation dependency. Process executable-path lookup is best-effort because Windows may deny access to some processes. Failure to read optional process metadata does not silently become authority; the result simply carries `None` for that optional field.
+
+### Testability
+
+The service depends on a small backend protocol. Tests use a fake backend and therefore do not require a real desktop, a real process lookup, or a specific foreground application. The production backend is selected only when the service is constructed without an explicit backend.
+
+### Phase 05 handoff
+
+Phase 05 may consume `WindowDetectionResult.window` as contextual evidence. It MUST treat title, process metadata, geometry and monitor identity as untrusted observations and MUST NOT infer user intent or authorization from them.
 
 ## 25. Versioning and Migration
 
