@@ -10,13 +10,13 @@ from .errors import SecurityDisabledError, SecurityInputError, SecurityPolicyErr
 from .models import SecurityConfig, SecurityInspection, SecurityStatus
 
 _SECRET_PATTERNS: tuple[Pattern[str], ...] = (
-    re_compile(r"(?i)\\bBearer\\s+[A-Za-z0-9._~+/=-]{8,}"),
-    re_compile(r"(?i)\\b(api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|secret)\\s*[:=]\\s*[^\\s,;]+"),
-    re_compile(r"\\bgh[pousr]_[A-Za-z0-9_]{20,}\\b"),
-    re_compile(r"\\bsk-[A-Za-z0-9_-]{20,}\\b"),
+    re_compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}"),
+    re_compile(r"(?i)\b(api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|secret)\s*[:=]\s*[^\s,;]+"),
+    re_compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+    re_compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
 )
-_CONTROL_PATTERN = re_compile(r"[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]")
-_IDENTIFIER_PATTERN = re_compile(r"^[A-Za-z0-9._:/@+\\-]+$")
+_CONTROL_PATTERN = re_compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_IDENTIFIER_PATTERN = re_compile(r"^[A-Za-z0-9._:/@+\-]+$")
 
 
 class SecurityService:
@@ -45,14 +45,7 @@ class SecurityService:
             reasons.append("control_characters_removed")
         if redacted:
             reasons.append("secrets_redacted")
-        return SecurityInspection(
-            status=SecurityStatus.SAFE,
-            original_length=original_length,
-            sanitized_text=sanitized,
-            redacted=redacted,
-            reasons=tuple(reasons),
-            inspected_at=datetime.now(timezone.utc),
-        )
+        return SecurityInspection(SecurityStatus.SAFE, original_length, sanitized, redacted, tuple(reasons), datetime.now(timezone.utc))
 
     def validate_identifier(self, value: str) -> str:
         self._ensure_enabled()
@@ -97,8 +90,7 @@ class SecurityService:
                 raise SecurityInputError("Metadata values must be text.")
             if len(value) > self.config.max_metadata_value_length:
                 raise SecurityPolicyError("Metadata value exceeds the configured length limit.")
-            inspected = self.inspect_text(value)
-            sanitized[safe_key] = inspected.sanitized_text
+            sanitized[safe_key] = self.inspect_text(value).sanitized_text
         return sanitized
 
     def close(self) -> None:
