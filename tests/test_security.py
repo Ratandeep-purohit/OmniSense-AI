@@ -1,18 +1,11 @@
-from datetime import datetime, timezone
-
 import pytest
 
 from omnisense_ai.security import SecurityConfig, SecurityService, SecurityStatus
-from omnisense_ai.security.errors import (
-    SecurityDisabledError,
-    SecurityInputError,
-    SecurityPolicyError,
-)
+from omnisense_ai.security.errors import SecurityDisabledError, SecurityInputError, SecurityPolicyError
 
 
 def test_inspect_text_is_bounded_and_redacts_secret() -> None:
-    service = SecurityService()
-    result = service.inspect_text("hello api_key=super-secret-value")
+    result = SecurityService().inspect_text("hello api_key=super-secret-value")
     assert result.status is SecurityStatus.SAFE
     assert "[REDACTED]" in result.sanitized_text
     assert "super-secret-value" not in result.sanitized_text
@@ -21,22 +14,21 @@ def test_inspect_text_is_bounded_and_redacts_secret() -> None:
 
 
 def test_inspect_text_removes_control_characters() -> None:
-    result = SecurityService().inspect_text("hello\\x00world\\x1b")
+    result = SecurityService().inspect_text("hello\x00world\x1b")
     assert result.sanitized_text == "helloworld"
     assert "control_characters_removed" in result.reasons
 
 
 def test_inspect_text_rejects_oversized_input() -> None:
-    service = SecurityService(SecurityConfig(max_input_length=4))
     with pytest.raises(SecurityPolicyError):
-        service.inspect_text("12345")
+        SecurityService(SecurityConfig(max_input_length=4)).inspect_text("12345")
 
 
 def test_identifier_is_normalized() -> None:
     assert SecurityService().validate_identifier("  app_01  ") == "app_01"
 
 
-@pytest.mark.parametrize("value", ["", "bad space", "bad\\nvalue", "bad?query"])
+@pytest.mark.parametrize("value", ["", "bad space", "bad\nvalue", "bad?query"])
 def test_identifier_rejects_unsafe_values(value: str) -> None:
     with pytest.raises((SecurityInputError, SecurityPolicyError)):
         SecurityService().validate_identifier(value)
@@ -73,21 +65,18 @@ def test_metadata_is_bounded_and_redacted() -> None:
 
 
 def test_metadata_item_limit() -> None:
-    service = SecurityService(SecurityConfig(max_metadata_items=1))
     with pytest.raises(SecurityPolicyError):
-        service.validate_metadata({"a": "1", "b": "2"})
+        SecurityService(SecurityConfig(max_metadata_items=1)).validate_metadata({"a": "1", "b": "2"})
 
 
 def test_metadata_value_limit() -> None:
-    service = SecurityService(SecurityConfig(max_metadata_value_length=3))
     with pytest.raises(SecurityPolicyError):
-        service.validate_metadata({"a": "1234"})
+        SecurityService(SecurityConfig(max_metadata_value_length=3)).validate_metadata({"a": "1234"})
 
 
 def test_disabled_service_rejects_operations() -> None:
-    service = SecurityService(SecurityConfig(enabled=False))
     with pytest.raises(SecurityDisabledError):
-        service.inspect_text("hello")
+        SecurityService(SecurityConfig(enabled=False)).inspect_text("hello")
 
 
 def test_closed_service_rejects_operations() -> None:
