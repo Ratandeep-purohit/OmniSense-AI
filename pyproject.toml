@@ -12,6 +12,7 @@ dependencies = ["mss>=9,<11"]
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
 ocr = ["pytesseract>=0.3,<0.4", "Pillow>=10,<13"]
+automation = ["pyautogui>=0.9,<1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
