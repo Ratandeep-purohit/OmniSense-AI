@@ -129,6 +129,13 @@ def test_provenance_is_preserved():
     assert entry.provenance == ("user_message",)
 
 
+def test_closed_service_rejects_operations():
+    memory = service()
+    memory.close()
+    with pytest.raises(MemoryDisabledError):
+        memory.recall("x", now=NOW)
+
+
 def test_expired_memory_does_not_count_toward_limit():
     memory = service(max_entries=1, retention_seconds=1)
     memory.remember(kind=MemoryKind.FACT, key="old", value="1", now=NOW)
