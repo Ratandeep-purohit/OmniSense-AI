@@ -65,8 +65,15 @@ def test_invalid_pixel_format_is_rejected() -> None:
 
 
 def test_invalid_byte_length_is_rejected() -> None:
+    class MalformedFrame:
+        data = b"bad"
+        width = 4
+        height = 2
+        pixel_format = "BGRA"
+        monitor_id = "1"
+
     with pytest.raises(InvalidFrameError):
-        VisualProcessor().process(frame(data=b"bad"))
+        VisualProcessor().process(MalformedFrame())
 
 
 def test_reset_starts_new_sequence() -> None:
