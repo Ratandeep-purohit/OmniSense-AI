@@ -2,7 +2,7 @@
 
 **Detailed Engineering Specification**
 **Phase ID:** P03
-**Status:** Planned
+**Status:** Implemented (2026-09-22)
 **Normative terms:** MUST = mandatory; SHOULD = recommended; MAY = optional.
 **Principle:** Intelligence without uncontrolled authority.
 
@@ -19,6 +19,57 @@ This document is the implementation contract for Phase 3. It is written for engi
 In scope: phase-specific implementation, contracts, validation, configuration, lifecycle, errors, observability, security, performance, tests and documentation.
 Out of scope: undocumented future-phase functionality, unrestricted command execution, hidden recording, hard-coded secrets, security bypasses and unsupported authority escalation.
 The phase MUST expose only documented capabilities. Downstream phases MUST consume contracts rather than private internals.
+
+## 2A. Implementation Status
+
+Phase 3 is implemented as a bounded OCR service with a provider-neutral engine contract and a Tesseract adapter.
+
+### Repository implementation
+
+| Path | Responsibility |
+|---|---|
+| `src/omnisense_ai/ocr/models.py` | OCR configuration, bounding boxes, tokens, lines and result contracts |
+| `src/omnisense_ai/ocr/errors.py` | Typed dependency, input, timeout, resource and execution failures |
+| `src/omnisense_ai/ocr/backend.py` | Engine protocol and Tesseract adapter |
+| `src/omnisense_ai/ocr/service.py` | Input validation, engine orchestration, normalization, reading order and quality |
+| `src/omnisense_ai/ocr/__init__.py` | Public Phase 3 API |
+| `tests/test_ocr.py` | Contract, filtering, quality-gate and configuration tests |
+
+### Runtime flow
+
+```text
+VisualFrame (Phase 2)
+      |
+      v
+Validate RGB24 + usable quality
+      |
+      v
+Bounded OCR engine call
+      |
+      +---- dependency / timeout / execution failure -> typed error
+      |
+      v
+Normalize tokens + confidence + bounding boxes
+      |
+      v
+Stable reading order
+      |
+      v
+Build lines + full text
+      |
+      v
+OCRResult
+```
+
+### Engine boundary
+
+The OCR service does not depend on Tesseract-specific internals. `OCREngine` is the boundary, so a future Windows-native, local-model, cloud or alternate OCR engine can be added without changing the downstream OCR contract.
+
+The current adapter uses Tesseract through `pytesseract`. The Python package is optional because the Tesseract executable is an external runtime dependency and is not silently downloaded or installed by OmniSense AI.
+
+### Safety and privacy boundary
+
+Phase 3 processes only the supplied `VisualFrame`. It does not capture the screen, archive screenshots, execute desktop actions, contact arbitrary network endpoints, or grant authority to OCR text. OCR output is treated as untrusted observation and must not become an instruction merely because it was detected on screen.
 
 ## 3. System Architecture
 
