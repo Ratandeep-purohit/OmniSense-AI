@@ -5,7 +5,7 @@ import pytest
 
 from omnisense_ai.action_verification.models import VerificationEvidence
 from omnisense_ai.context_engine.models import ContextAge, ContextFreshness, ContextSnapshot, DesktopContext
-from omnisense_ai.desktop_automation.backend import NullDesktopAutomationBackend
+from omnisense_ai.desktop_automation.backend import ResolvedTarget
 from omnisense_ai.desktop_automation.models import AutomationConfig
 from omnisense_ai.desktop_automation.service import DesktopAutomationService
 from omnisense_ai.integration import IntegrationInputError, OmniSensePipeline, PipelineStatus
@@ -13,6 +13,15 @@ from omnisense_ai.safety_permission.models import SafetyConfig
 from omnisense_ai.safety_permission.service import SafetyPermissionEngine
 
 NOW = datetime.now(timezone.utc)
+
+
+class DeterministicAutomationBackend:
+    """Test-only backend that records execution without touching the desktop."""
+    def execute(self, step, target: ResolvedTarget) -> str:
+        return "deterministic execution"
+
+    def close(self) -> None:
+        return None
 
 
 def snapshot() -> ContextSnapshot:
@@ -39,7 +48,7 @@ def snapshot() -> ContextSnapshot:
 def pipeline(*, enabled: bool = False) -> OmniSensePipeline:
     automation = DesktopAutomationService(
         AutomationConfig(enabled=enabled),
-        NullDesktopAutomationBackend(),
+        DeterministicAutomationBackend(),
     )
     return OmniSensePipeline(
         safety=SafetyPermissionEngine(
