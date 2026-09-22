@@ -22,6 +22,12 @@ G --> V[Verification]
 V --> C[Context / Memory]
 ```
 
+## Visual diagrams
+
+![Development lifecycle](assets/omnisense-lifecycle.svg)
+
+![Intelligence pipeline](assets/omnisense-pipeline.svg)
+
 ## Phase map
 
 | Phase | Name | Status |
