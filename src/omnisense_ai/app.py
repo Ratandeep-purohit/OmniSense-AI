@@ -1,4 +1,4 @@
-"""Minimal Phase 0 application entry point and health check."""
+"""Phase 0 application bootstrap, lifecycle, and health checks."""
 
 from __future__ import annotations
 
@@ -6,28 +6,59 @@ from dataclasses import dataclass
 
 from .config import AppConfig, load_config
 from .logging_config import configure_logging
+from .runtime import ApplicationRuntime, RuntimeSnapshot
 
 
 @dataclass(frozen=True, slots=True)
 class HealthStatus:
-    """The minimal health response exposed by the Phase 0 foundation."""
+    """Deterministic health response for the foundation."""
 
     status: str
     environment: str
+    runtime_state: str
+    generation: int
 
 
-def health_check(config: AppConfig | None = None) -> HealthStatus:
-    """Return a deterministic health result without starting future-phase services."""
+def health_check(
+    config: AppConfig | None = None,
+    runtime: ApplicationRuntime | None = None,
+) -> HealthStatus:
+    """Return health without starting future-phase services."""
 
     active_config = load_config() if config is None else config
-    return HealthStatus(status="ok", environment=active_config.environment)
+    snapshot = runtime.snapshot() if runtime is not None else RuntimeSnapshot(
+        state="created",
+        environment=active_config.environment,
+        generation=0,
+    )
+    return HealthStatus(
+        status="ok" if snapshot.state != "failed" else "degraded",
+        environment=active_config.environment,
+        runtime_state=snapshot.state.value if hasattr(snapshot.state, "value") else str(snapshot.state),
+        generation=snapshot.generation,
+    )
+
+
+def bootstrap(config: AppConfig | None = None) -> tuple[ApplicationRuntime, HealthStatus]:
+    """Create and start the Phase 0 runtime only."""
+
+    active_config = load_config() if config is None else config
+    runtime = ApplicationRuntime(active_config)
+    runtime.start()
+    return runtime, health_check(active_config, runtime)
 
 
 def main() -> int:
-    """Start the Phase 0 foundation and report its health."""
+    """Start the foundation and report its health."""
 
     config = load_config()
     logger = configure_logging(config.log_level)
-    status = health_check(config)
-    logger.info("OmniSense AI Phase 0 foundation started in %s environment.", status.environment)
+    runtime, status = bootstrap(config)
+    logger.info(
+        "OmniSense AI foundation started: environment=%s state=%s generation=%d",
+        status.environment,
+        status.runtime_state,
+        status.generation,
+    )
+    runtime.stop()
     return 0
