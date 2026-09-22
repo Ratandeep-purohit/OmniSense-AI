@@ -96,8 +96,14 @@ class OCRService:
         parts: list[str] = []
         total = 0
         truncated = False
+        previous: OCRToken | None = None
         for token in tokens:
-            separator = "" if not parts or token.line == tokens[max(0, len(parts) - 1)].line else "\n"
+            if previous is None:
+                separator = ""
+            elif token.line != previous.line:
+                separator = "\n"
+            else:
+                separator = " "
             addition = separator + token.text
             if total + len(addition) > self.config.max_text_length:
                 remaining = self.config.max_text_length - total
@@ -107,6 +113,7 @@ class OCRService:
                 break
             parts.append(addition)
             total += len(addition)
+            previous = token
         return "".join(parts).strip(), truncated
 
     @staticmethod
