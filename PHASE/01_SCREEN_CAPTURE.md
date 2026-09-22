@@ -2,7 +2,7 @@
 
 **Detailed Engineering Specification**
 **Phase ID:** P01
-**Status:** Implemented / Current
+**Status:** Implemented / Hardened (2026-09-22)
 **Normative terms:** MUST = mandatory; SHOULD = recommended; MAY = optional.
 **Principle:** Intelligence without uncontrolled authority.
 
@@ -2609,3 +2609,74 @@ Completion evidence SHOULD include implementation commit, test commands/results,
 ---
 
 **Phase 1 engineering rule:** build deeply, keep authority narrow, verify boundaries, and leave reproducible evidence.
+
+## 30. Implementation Audit — 2026-09-22
+
+The phase was re-audited against the repository implementation. Gaps found in the first implementation included backend reopen behavior, lifecycle synchronization, unused capture-rate configuration, ambiguous close semantics, missing BGRA payload-size validation, naive timestamps, and an implicit public pixel-format/rate-limit contract.
+
+### 30.1 Corrective changes
+
+| Area | Risk found | Correction |
+|---|---|---|
+| Backend lifecycle | Stop could leave MSS unavailable for restart | Explicit `open()` plus reopenable MSS ownership |
+| Service concurrency | Lifecycle/backend calls were unsynchronized | `RLock` protects lifecycle and capture operations |
+| Rate control | interval/FPS settings were not enforced | Stricter configured interval/FPS budget is enforced |
+| Permanent close | close semantics were ambiguous | Service becomes stopped and permanently closed |
+| Frame integrity | Invalid BGRA byte lengths could pass | BGRA payload must equal width × height × 4 |
+| Timestamp integrity | Naive timestamps were accepted | Frame timestamp must be timezone-aware |
+| Backend trust boundary | Wrong-monitor frame could pass | Returned monitor identity is validated |
+| Public contract | Pixel/rate-limit types were implicit | `PixelFormat` and `CaptureRateLimitError` exported |
+| Restart | Backend-dependent behavior | MSS backend reopens and rate state resets |
+
+### 30.2 Revised lifecycle
+
+```text
+STOPPED --start()--> RUNNING --pause()--> PAUSED
+   ^                    |                  |
+   |                    +----stop()-------+
+   |                                       |
+   +--------------- resume() --------------+
+
+close() from any state -> permanently CLOSED service object
+```
+
+### 30.3 Revised boundary
+
+```text
+Caller
+  -> ScreenCaptureService
+     -> lifecycle lock
+     -> capture policy
+     -> monitor selection
+     -> region containment
+     -> rate/interval budget
+     -> Backend Adapter
+        -> OS capture
+        -> validated ScreenFrame
+  -> Phase 02 Visual Processing
+```
+
+### 30.4 Privacy rule
+
+Phase 1 does not maintain screenshot history, write captured pixels to disk, send pixels over the network, or put screen content into logs. Only the current frame returned to the caller exists in the capture layer's managed flow.
+
+### 30.5 Platform behavior
+
+The real backend uses `mss` and emits BGRA bytes. Monitor identifiers are runtime identifiers, not permanent hardware identities. Windows multi-monitor layouts can contain negative virtual-screen coordinates, so region validation is based on each monitor's actual bounds.
+
+### 30.6 Verification additions
+
+Tests now cover lifecycle restart, close semantics, rate limiting, strict BGRA payload sizing, timezone-aware timestamps, monitor containment, backend failure translation, and opt-in real-capture integration. Real desktop capture remains opt-in so test runs never silently capture the user's screen.
+
+### 30.7 Phase 2 handoff guarantees
+
+1. BGRA frames contain exactly `width × height × 4` bytes.
+2. Width and height are positive.
+3. Monitor identity is non-empty and validated against the request.
+4. Frame timestamps are timezone-aware.
+5. Region dimensions match frame dimensions when region metadata exists.
+6. Capture requests obey configured interval/FPS limits.
+7. Phase 1 does not persist screenshot history.
+8. Failures are surfaced through typed `CaptureError` subclasses.
+
+**Audit result:** Phase 1 is hardened for the current Phase 0 → Phase 1 → Phase 2 pipeline.
