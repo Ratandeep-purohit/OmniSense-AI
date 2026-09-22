@@ -85,8 +85,10 @@ def test_service_rejects_after_close():
 
 def test_window_contract_rejects_invalid_rect():
     with pytest.raises(ValueError):
-        WindowRect(0, 0, 10, 10)
-        # right/bottom equal to left/top would be invalid; this line is kept explicit below.
+        WindowRect(10, 20, 10, 100)
+
+    with pytest.raises(ValueError):
+        WindowRect(10, 20, 100, 20)
 
 
 def test_window_detection_result_requires_timezone_aware_timestamp():
