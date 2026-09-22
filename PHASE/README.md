@@ -1,37 +1,23 @@
-# OmniSense AI — Development Phase Documentation
+# OmniSense AI — Phase Engineering Documentation
 
-This directory contains the phase-level engineering specifications for OmniSense AI.
+These phase files are detailed engineering specifications rather than short feature notes. Each phase defines scope, architecture, requirements, contracts, state, errors, security, performance, testing, operations, acceptance and handoff.
 
-## Development lifecycle
+## Principle
+
+> Intelligence without uncontrolled authority.
 
 ```mermaid
 flowchart LR
-P[PLAN] --> I[IMPLEMENT] --> T[TEST] --> V[VERIFY] --> D[DOCUMENT] --> C[COMMIT] --> N[NEXT PHASE]
+P[Perceive] --> U[Understand] --> C[Context] --> R[Reason] --> A[Assist] --> PL[Plan] --> S[Safety] --> X[Execute] --> V[Verify] --> M[Memory]
+S -. deny/confirm .-> STOP[Stop / Ask User]
 ```
 
-## System evolution
+## Development lifecycle
 
-```mermaid
-flowchart TB
-S[Digital Environment] --> P[Perception]
-P --> U[Understanding]
-U --> R[Reasoning]
-R --> A[Assistance]
-A --> G[Guarded Action]
-G --> V[Verification]
-V --> C[Context / Memory]
-```
+PLAN → DESIGN → IMPLEMENT → TEST → SECURITY → VERIFY → DOCUMENT → COMMIT → HANDOFF
 
-## Visual diagrams
+## Phase status
 
-![Development lifecycle](assets/omnisense-lifecycle.svg)
-
-![Intelligence pipeline](assets/omnisense-pipeline.svg)
-
-## Phase map
-
-| Phase | Name | Status |
-|---|---|---|
 | 0 | Foundation | Complete |
 | 1 | Screen Capture | Implemented / Current |
 | 2 | Visual Processing | Planned |
@@ -49,15 +35,9 @@ V --> C[Context / Memory]
 | 14 | Performance | Planned |
 | 15 | Security Hardening | Planned |
 | 16 | Testing & Evaluation | Planned |
-| 17 | Full Integration | Planned |
+| 17 | Full System Integration | Planned |
 | 18 | Packaging & Release | Planned |
 
-## Phase completion rule
+## Completion gate
 
-A phase is complete only after implementation, tests, verification, documentation and acceptance criteria are satisfied. Future-phase functionality must not be silently introduced into an earlier phase.
-
-## Core boundary
-
-**Intelligence without uncontrolled authority.**
-
-AI reasoning, external content and generated actions remain lower-trust than application security policy and explicit user authorization.
+Implementation + tests + security review + performance evidence where applicable + documentation + acceptance evidence + handoff contract = phase complete.
