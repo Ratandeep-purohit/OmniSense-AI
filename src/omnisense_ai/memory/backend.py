@@ -20,6 +20,7 @@ class MemoryBackend(Protocol):
         now: datetime | None = None,
     ) -> tuple[MemoryEntry, ...]: ...
     def list_active(self, *, now: datetime | None = None) -> tuple[MemoryEntry, ...]: ...
+    def list_entries(self) -> tuple[MemoryEntry, ...]: ...
     def close(self) -> None: ...
 
 
@@ -70,6 +71,10 @@ class InMemoryMemoryBackend:
                 matches.append(entry)
         matches.sort(key=lambda item: item.updated_at, reverse=True)
         return tuple(matches[:limit])
+
+    def list_entries(self) -> tuple[MemoryEntry, ...]:
+        self._ensure_open()
+        return tuple(self._entries.values())
 
     def list_active(self, *, now: datetime | None = None) -> tuple[MemoryEntry, ...]:
         self._ensure_open()
