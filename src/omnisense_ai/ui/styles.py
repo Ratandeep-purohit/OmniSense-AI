@@ -5,11 +5,19 @@ clear hierarchy, light surfaces, strong typography, and minimal decoration.
 """
 
 APP_STYLE = """
-QMainWindow, QWidget {
+QMainWindow {
     background: #f4f6f8;
     color: #17202a;
     font-family: "Segoe UI";
     font-size: 13px;
+}
+QWidget {
+    color: #17202a;
+    font-family: "Segoe UI";
+    font-size: 13px;
+}
+QLabel {
+    background: transparent;
 }
 QFrame#sidebar {
     background: #ffffff;
