@@ -1,7 +1,7 @@
 """Storage boundary for Phase 13 memory."""
 from __future__ import annotations
 
-from collections.abc import Protocol
+from typing import Protocol
 from datetime import datetime, timezone
 
 from .models import MemoryEntry, MemoryKind, MemoryStatus
