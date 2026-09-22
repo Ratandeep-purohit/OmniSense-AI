@@ -179,8 +179,9 @@ def test_state_transitions_pause_resume_stop_start_and_cleanup() -> None:
     service.start()
     assert service.state is CaptureState.RUNNING
 
-    with pytest.raises(CaptureNotActiveError):
-        service.capture_selected_monitor()
+    frame = service.capture_selected_monitor()
+    assert frame.monitor_id == "1"
+    assert frame.source is FrameSource.MONITOR
 
 
 def test_capture_rate_limit_is_enforced():
