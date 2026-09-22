@@ -98,8 +98,8 @@ class PerformanceMonitor:
     def benchmark(self, operation: Callable[[], object], *, iterations: int = 10, warmups: int = 1) -> BenchmarkResult:
         if not callable(operation):
             raise PerformanceInputError("operation must be callable.")
-        if iterations < 1 or warmups < 0 or iterations > self.config.max_samples:
-            raise PerformanceInputError("iterations are outside configured bounds.")
+        if iterations < 1 or warmups < 0 or iterations > self.config.max_samples or warmups > self.config.max_samples:
+            raise PerformanceInputError("benchmark iterations/warmups are outside configured bounds.")
         for _ in range(warmups):
             operation()
         durations: list[float] = []
