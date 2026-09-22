@@ -37,3 +37,11 @@ def test_navigation(qt_app):
     window.show_page("assistant")
     assert window.stack.currentWidget() is window._pages["assistant"]
     window.close()
+
+
+def test_permission_dialog_accepts_explicit_authorization(qt_app):
+    from omnisense_ai.ui.app import _PermissionDialog
+    dialog = _PermissionDialog(None, "Open Calculator")
+    dialog.accept()
+    assert dialog.result() == 1
+    dialog.close()
