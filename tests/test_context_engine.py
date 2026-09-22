@@ -90,3 +90,14 @@ def test_long_visible_text_is_bounded():
     )
     assert result.context.visible_text == "Save"
     assert result.context.truncated is True
+
+
+
+def test_context_freshness_is_calculated_from_capture_time():
+    from datetime import timedelta
+    result = ContextEngine().build(frame(), ocr(), window(), ui(), now=datetime(2026, 9, 22, tzinfo=timezone.utc))
+    later = datetime(2026, 9, 22, 0, 0, 3, tzinfo=timezone.utc)
+    assert result.is_fresh(now=later, max_age_seconds=5)
+    assert result.age_seconds(now=later) == pytest.approx(3.0)
+    expired = datetime(2026, 9, 22, 0, 0, 6, tzinfo=timezone.utc)
+    assert not result.is_fresh(now=expired, max_age_seconds=5)
