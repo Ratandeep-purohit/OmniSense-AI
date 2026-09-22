@@ -20,5 +20,6 @@ class ActionPlanner:
         elif "wait" in low: action_type=ActionType.WAIT
         if action_type is None: return ActionPlan(str(uuid4()),snapshot.context.context_id,intent,PlanStatus.NEEDS_CLARIFICATION,rationale="No safe action type could be derived from explicit intent.")
         risk=ActionRisk.MEDIUM if action_type in (ActionType.TYPE,ActionType.CLICK) else ActionRisk.LOW
+        requires_confirmation = risk != ActionRisk.LOW
         step=ActionStep("step-1",action_type,ActionTarget("current-context-target","Target described by explicit user intent."),(),risk,"Requested UI state should change as described.",action_type in (ActionType.WAIT,ActionType.SCROLL))
-        return ActionPlan(str(uuid4()),snapshot.context.context_id,intent,PlanStatus.READY,(step,),"Derived only from explicit user intent and current context.",True)
+        return ActionPlan(str(uuid4()),snapshot.context.context_id,intent,PlanStatus.READY,(step,),"Derived only from explicit user intent and current context.",requires_confirmation)
