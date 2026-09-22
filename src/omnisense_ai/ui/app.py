@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QDialog,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
@@ -63,6 +64,47 @@ class _SnapshotTask(QRunnable):
         except Exception as exc:
             self.signals.failed.emit(f"{type(exc).__name__}: {exc}")
 
+
+class _PermissionDialog(QDialog):
+    """Visible, in-app authorization dialog for desktop control."""
+
+    def __init__(self, parent: QWidget, intent: str) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("OmniSense Permission")
+        self.setModal(True)
+        self.setMinimumWidth(480)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(12)
+
+        title = QLabel("Desktop action requires permission")
+        title.setStyleSheet("font-size:20px; font-weight:700;")
+        layout.addWidget(title)
+
+        task = QLabel(intent)
+        task.setWordWrap(True)
+        task.setStyleSheet("font-size:15px; font-weight:600;")
+        layout.addWidget(task)
+
+        detail = QLabel(
+            "OmniSense will use its bounded desktop automation backend for this action.\\n"
+            "Only the requested action is authorized; arbitrary commands are not allowed."
+        )
+        detail.setWordWrap(True)
+        detail.setStyleSheet("color:#64748b; line-height:1.4;")
+        layout.addWidget(detail)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        cancel = QPushButton("Cancel")
+        allow = QPushButton("Allow once")
+        allow.setDefault(True)
+        allow.setObjectName("primaryButton")
+        cancel.clicked.connect(self.reject)
+        allow.clicked.connect(self.accept)
+        buttons.addWidget(cancel)
+        buttons.addWidget(allow)
+        layout.addLayout(buttons)
 
 class OmniSenseWindow(QMainWindow):
     """Main OmniSense desktop product window."""
@@ -534,15 +576,10 @@ class OmniSenseWindow(QMainWindow):
             phrase in intent.casefold()
             for phrase in ("open ", "launch ", "start ", "click ", "type ", "write ", "press ")
         ):
-            choice = QMessageBox.question(
-                self,
-                "Enable desktop automation?",
-                "This request can control the desktop. Enable automation for this session?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if choice is not QMessageBox.StandardButton.Yes:
+            permission = _PermissionDialog(self, intent)
+            if permission.exec() != QDialog.DialogCode.Accepted:
                 self._input.clear()
+                self._append_chat("OmniSense", "Request cancelled. Automation remains disabled.")
                 self.statusBar().showMessage("Request cancelled — automation remains disabled")
                 return
             self._automation_check.blockSignals(True)
