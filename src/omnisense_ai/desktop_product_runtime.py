@@ -10,6 +10,7 @@ from .action_verification.models import VerificationEvidence, VerificationConfig
 from .action_verification.service import ActionVerificationService
 from .capabilities import Capability, CapabilityManager
 from .application_discovery import ApplicationCandidate, WindowsApplicationResolver
+from .application_identity import ApplicationIdentityService
 from .config import CaptureConfig
 from .context_engine.models import ContextSnapshot
 from .context_engine.service import ContextEngine
@@ -49,6 +50,7 @@ class DesktopProductRuntime:
         self.windows = WindowDetectionService()
         self.context_engine = ContextEngine()
         self.application_resolver = WindowsApplicationResolver()
+        self.application_identity = ApplicationIdentityService(self.application_resolver)
         self.automation_enabled = False
         self.capabilities = CapabilityManager(ttl_seconds=3600)
         self.automation = DesktopAutomationService(
@@ -164,6 +166,15 @@ class DesktopProductRuntime:
         verified_target = matched_window is not None
         observed_app = info.process_name if info else None
         application_id = candidate.application_id if candidate and verified_target else None
+        runtime_identity = None
+        if verified_target and info is not None:
+            try:
+                runtime_identity = self.application_identity.identify_window(info.hwnd)
+            except Exception:
+                # Verification remains conservative: a window match without a
+                # readable runtime identity is evidence, but not a stronger identity claim.
+                verified_target = False
+                application_id = None
 
         return VerificationEvidence(
             context_id=execution.context_id,
@@ -178,6 +189,10 @@ class DesktopProductRuntime:
                 ("expected.application", "|".join(sorted(expected_apps))),
                 ("verification.window_match", "true" if verified_target else "false"),
                 ("verification.foreground", "true" if info and info.is_foreground else "false"),
+                ("identity.pid", str(runtime_identity.process.pid) if runtime_identity else ""),
+                ("identity.creation_time_ns", str(runtime_identity.process.creation_time_ns) if runtime_identity else ""),
+                ("identity.executable_path", runtime_identity.process.executable_path if runtime_identity else ""),
+                ("identity.hwnd", str(runtime_identity.hwnd) if runtime_identity else ""),
             ),
             source="windows_window_enumeration",
         )
