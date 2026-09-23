@@ -117,7 +117,7 @@ def test_verification_stage_is_reachable() -> None:
     result = pipeline(enabled=True).run(
         snapshot(),
         "wait",
-        evidence_provider=lambda execution: VerificationEvidence(
+        evidence_provider=lambda plan, execution: VerificationEvidence(
             context_id=execution.context_id,
             captured_at=execution.finished_at,
             visible_text="Ready",
