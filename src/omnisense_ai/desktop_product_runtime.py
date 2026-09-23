@@ -111,35 +111,44 @@ class DesktopProductRuntime:
         self.automation.close()
 
     def _evidence_after_execution(self, plan, execution: AutomationResult) -> VerificationEvidence:
-        """Collect fresh foreground-window evidence after execution.
+        """Collect fresh post-action Windows evidence.
 
-        App launches can take longer than the automation call itself. Polling is
-        bounded and read-only, so verification waits for the expected foreground
-        application without granting any additional desktop authority.
+        Verification is not restricted to the foreground window. Applications
+        can launch in the background, hand off from a bootstrapper, or briefly
+        change foreground ownership while their real top-level window becomes
+        available. We therefore observe the complete visible top-level window
+        set and prefer a foreground match when one exists.
         """
         expected = plan.steps[0].expected_outcome if plan.steps else ""
         expected_apps = self._expected_apps(expected)
         expected_title = self._expected_title(expected)
-        deadline = time.monotonic() + 4.0
+        deadline = time.monotonic() + 5.0
         latest = self._safe_window()
-        matched = not expected_apps and not expected_title
+        matched_window = None
 
         while time.monotonic() < deadline:
-            latest = self._safe_window()
-            info = latest.window
-            process = (info.process_name or "").casefold() if info else ""
-            title = (info.title or "").casefold() if info else ""
-            process_ok = not expected_apps or process in expected_apps
-            title_ok = not expected_title or expected_title in title
-            if info is not None and process_ok and title_ok:
-                matched = True
+            foreground = self._safe_window()
+            windows = self._safe_windows()
+            candidates = tuple(w for w in windows if self._window_matches(w, expected_apps, expected_title))
+
+            if candidates:
+                matched_window = next(
+                    (w for w in candidates if w.is_foreground),
+                    candidates[0],
+                )
+                latest = foreground
                 break
+
+            latest = foreground
             time.sleep(0.2)
 
-        info = latest.window
+        info = matched_window or latest.window
+        verified_target = matched_window is not None
         observed_app = info.process_name if info else None
-        if (expected_apps or expected_title) and not matched:
+
+        if (expected_apps or expected_title) and not verified_target:
             observed_app = None
+
         return VerificationEvidence(
             context_id=execution.context_id,
             captured_at=datetime.now(timezone.utc),
@@ -149,10 +158,26 @@ class DesktopProductRuntime:
             window_title=info.title if info else None,
             facts=(
                 ("execution.status", execution.status.value),
-                ("expected.application", ",".join(sorted(expected_apps))),
+                ("expected.application", "|".join(sorted(expected_apps))),
+                ("verification.window_match", "true" if verified_target else "false"),
+                ("verification.foreground", "true" if info and info.is_foreground else "false"),
             ),
-            source="windows_window_detection",
+            source="windows_window_enumeration",
         )
+
+    def _safe_windows(self):
+        try:
+            return self.windows.enumerate_visible_windows()
+        except Exception:
+            return ()
+
+    @staticmethod
+    def _window_matches(window, expected_apps: set[str], expected_title: str) -> bool:
+        process = (window.process_name or "").casefold()
+        title = (window.title or "").casefold()
+        process_ok = not expected_apps or process in expected_apps
+        title_ok = not expected_title or expected_title in title
+        return bool(window.is_visible and process_ok and title_ok)
 
     @staticmethod
     def _expected_apps(expectation: str) -> set[str]:
