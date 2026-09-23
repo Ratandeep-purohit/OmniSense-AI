@@ -41,6 +41,8 @@ class WindowsWindowDetectionBackend:
         self._configure_api()
 
     def _configure_api(self) -> None:
+        self._user32.EnumWindows.argtypes = [ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM), wintypes.LPARAM]
+        self._user32.EnumWindows.restype = wintypes.BOOL
         self._user32.GetForegroundWindow.restype = wintypes.HWND
         self._user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
         self._user32.GetWindowTextLengthW.restype = ctypes.c_int
