@@ -69,7 +69,7 @@ class WindowsApplicationResolver:
             if score:
                 scored.append((score, candidate))
 
-        scored.sort(key=lambda item: (-item[0], item[1].display_name.casefold()))
+        scored.sort(key=lambda item: (-item[0], -int(bool(item[1].process_name)), item[1].display_name.casefold(), item[1].source))
         if not scored or scored[0][0] < 70:
             return None
 
