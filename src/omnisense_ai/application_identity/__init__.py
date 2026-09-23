@@ -1,4 +1,17 @@
-"""Canonical Windows application identity contracts."""
-from .models import ApplicationIdentity
-from .service import ApplicationIdentityService
-__all__ = ["ApplicationIdentity", "ApplicationIdentityService"]
+"""Canonical Windows application and runtime identity contracts."""
+from .models import (
+    ApplicationIdentity,
+    IdentitySource,
+    ProcessIdentity,
+    WindowIdentity,
+)
+from .service import ApplicationIdentityError, ApplicationIdentityService
+
+__all__ = [
+    "ApplicationIdentity",
+    "ApplicationIdentityError",
+    "ApplicationIdentityService",
+    "IdentitySource",
+    "ProcessIdentity",
+    "WindowIdentity",
+]
