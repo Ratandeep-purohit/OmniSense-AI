@@ -1,18 +1,13 @@
-"""Translate discovered candidates into stable application identities."""
-from ..application_discovery import ApplicationCandidate, WindowsApplicationResolver
+"""Translate discovered candidates into canonical identities."""
+from ..application_discovery import ApplicationCandidate,WindowsApplicationResolver
 from .models import ApplicationIdentity
-
 class ApplicationIdentityService:
-    def __init__(self, resolver: WindowsApplicationResolver | None = None):
-        self.resolver=resolver or WindowsApplicationResolver()
-    def resolve(self, query: str) -> ApplicationIdentity | None:
-        candidate=self.resolver.resolve(query)
-        return self.from_candidate(candidate) if candidate else None
+    def __init__(self,resolver=None): self.resolver=resolver or WindowsApplicationResolver()
+    def resolve(self,query):
+        c=self.resolver.resolve(query); return self.from_candidate(c) if c else None
     @staticmethod
-    def from_candidate(candidate: ApplicationCandidate) -> ApplicationIdentity:
-        process_names=(candidate.process_name,) if candidate.process_name else ()
-        adapter="generic.windows"
-        name=candidate.display_name.casefold()
-        if "epic games" in name or "epicgameslauncher.exe" in " ".join(process_names).casefold(): adapter="epic.games.launcher"
+    def from_candidate(c:ApplicationCandidate):
+        processes=(c.process_name,) if c.process_name else (); name=c.display_name.casefold(); adapter="generic.windows"
+        if "epic games" in name or "epicgameslauncher.exe" in " ".join(processes).casefold(): adapter="epic.games.launcher"
         elif name in {"microsoft word","microsoft excel","microsoft powerpoint"}: adapter="microsoft.office"
-        return ApplicationIdentity(candidate.application_id,candidate.display_name,candidate.launch_target,candidate.source,process_names,candidate.launch_target if candidate.launch_target.lower().endswith(".exe") else None,candidate.launch_target if candidate.source=="aumid" else None,adapter,(candidate.display_name,))
+        return ApplicationIdentity(c.application_id,c.display_name,c.launch_target,c.source,processes,c.launch_target if c.launch_target.lower().endswith(".exe") else None,c.launch_target if c.source=="aumid" else None,adapter,(c.display_name,))
