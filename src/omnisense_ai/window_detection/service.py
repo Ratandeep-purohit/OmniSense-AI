@@ -58,6 +58,22 @@ class WindowDetectionService:
             )
             return result
 
+    def enumerate_visible_windows(self):
+        """Return a fresh read-only snapshot of visible top-level windows."""
+        with self._lock:
+            if self._closed:
+                raise WindowDetectionBackendError("Window detection service is closed.")
+            try:
+                return self._backend.enumerate_visible_windows()
+            except WindowDetectionUnavailableError:
+                raise
+            except WindowDetectionBackendError:
+                raise
+            except PermissionError as exc:
+                raise WindowDetectionBackendError("Windows denied window enumeration access.") from exc
+            except Exception as exc:
+                raise WindowDetectionBackendError("Window enumeration backend failed.") from exc
+
     def close(self) -> None:
         with self._lock:
             self._closed = True
