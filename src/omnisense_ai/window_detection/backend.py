@@ -16,6 +16,9 @@ class WindowDetectionBackend(Protocol):
     def detect_active_window(self) -> WindowInfo | None:
         ...
 
+    def enumerate_visible_windows(self) -> tuple[WindowInfo, ...]:
+        ...
+
 
 class WindowsWindowDetectionBackend:
     """Read-only Windows API adapter.
@@ -63,6 +66,44 @@ class WindowsWindowDetectionBackend:
         self._kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
         self._kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
         self._kernel32.CloseHandle.restype = wintypes.BOOL
+
+    def enumerate_visible_windows(self) -> tuple[WindowInfo, ...]:
+        """Return visible top-level windows using read-only EnumWindows."""
+        windows: list[WindowInfo] = []
+        enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        @enum_proc
+        def callback(hwnd, _lparam):
+            try:
+                handle = int(hwnd)
+                if not self._user32.IsWindowVisible(hwnd) or self._user32.IsIconic(hwnd):
+                    return True
+                title = self._read_title(handle)
+                if not title.strip():
+                    return True
+                process_id = self._read_process_id(handle)
+                process_name, executable_path = self._read_process_metadata(process_id)
+                rect = self._read_rect(handle)
+                monitor_id = self._read_monitor_id(handle)
+                windows.append(WindowInfo(
+                    hwnd=handle,
+                    title=title,
+                    process_id=process_id,
+                    process_name=process_name,
+                    executable_path=executable_path,
+                    rect=rect,
+                    monitor_id=monitor_id,
+                    state=WindowState.ACTIVE,
+                    is_visible=True,
+                    is_foreground=(handle == int(self._user32.GetForegroundWindow())),
+                ))
+            except (OSError, ValueError, WindowDetectionBackendError):
+                return True
+            return True
+
+        if not self._user32.EnumWindows(callback, 0):
+            raise WindowDetectionBackendError("Windows could not enumerate top-level windows.")
+        return tuple(windows)
 
     def detect_active_window(self) -> WindowInfo | None:
         hwnd = int(self._user32.GetForegroundWindow())
