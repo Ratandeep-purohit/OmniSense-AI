@@ -673,6 +673,7 @@ class OmniSenseWindow(QMainWindow):
     def _refresh_health(self) -> None:
         try:
             status = health_check(load_config())
+            diagnostics = collect_diagnostics(self._runtime.capabilities if self._runtime else None)
             message = (
                 f"STATUS       {status.status}\n"
                 f"ENVIRONMENT  {status.environment}\n"
@@ -683,7 +684,9 @@ class OmniSenseWindow(QMainWindow):
                 "SECURITY     ACTIVE\n"
                 "PLANNING     READY\n"
                 "VERIFICATION READY\n"
-                f"AUTOMATION   {'ENABLED' if self._runtime and self._runtime.automation_enabled else 'DISABLED'}"
+                f"AUTOMATION   {'ENABLED' if self._runtime and self._runtime.automation_enabled else 'DISABLED'}\n"
+                f"NATIVE UIA   {'AVAILABLE' if diagnostics.native_uia_available else 'UNAVAILABLE'}\n"
+                f"COMPAT       {'SUPPORTED' if diagnostics.compatibility.supported else 'UNSUPPORTED'}"
             )
         except Exception as exc:
             message = f"Diagnostics error: {type(exc).__name__}: {exc}"
