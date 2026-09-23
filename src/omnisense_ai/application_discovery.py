@@ -69,14 +69,30 @@ class WindowsApplicationResolver:
             if score:
                 scored.append((score, candidate))
 
-        scored.sort(key=lambda item: (-item[0], -int(bool(item[1].process_name)), item[1].display_name.casefold(), item[1].source))
+        scored.sort(
+            key=lambda item: (
+                -item[0],
+                -int(bool(item[1].process_name)),
+                item[1].display_name.casefold(),
+                item[1].source,
+                item[1].launch_target.casefold(),
+            )
+        )
         if not scored or scored[0][0] < 70:
             return None
 
-        # If two unrelated applications match equally well, do not guess.
-        if len(scored) > 1 and scored[0][0] == scored[1][0]:
+        # Multiple Windows entries can represent the same logical application
+        # (for example duplicate Start Menu shortcuts). Do not treat those as
+        # ambiguity when their normalized display name is identical.
+        top_score, top = scored[0]
+        top_name = self._normalize(top.display_name)
+        distinct = [
+            item for item in scored[1:]
+            if item[0] == top_score and self._normalize(item[1].display_name) != top_name
+        ]
+        if distinct:
             return None
-        return scored[0][1]
+        return top
 
     def is_trusted_target(self, target: str) -> bool:
         """Revalidate a launch target against current Windows discovery."""
