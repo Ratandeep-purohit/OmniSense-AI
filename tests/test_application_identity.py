@@ -1,3 +1,7 @@
+import os
+
+import pytest
+
 from omnisense_ai.application_discovery import ApplicationCandidate
 from omnisense_ai.application_identity import (
     ApplicationIdentity,
@@ -25,8 +29,6 @@ def test_process_identity_rejects_pid_only_matching():
 
 
 def test_process_identity_requires_executable_and_creation_time():
-    import pytest
-
     with pytest.raises(ValueError):
         process(path="")
     with pytest.raises(ValueError):
@@ -59,8 +61,30 @@ def test_application_identity_from_discovered_candidate():
 
 
 def test_non_windows_runtime_identity_is_explicitly_unavailable():
-    import pytest
-
     service = ApplicationIdentityService()
+    if os.name == "nt":
+        pytest.skip("Portable non-Windows guard test")
     with pytest.raises(Exception, match="Windows identity APIs require Windows"):
         service.identify_process(1)
+
+
+def test_windows_identity_reads_the_current_process():
+    if os.name != "nt":
+        pytest.skip("Windows-only runtime identity validation")
+
+    service = ApplicationIdentityService()
+    identity = service.identify_process(os.getpid())
+
+    assert identity.pid == os.getpid()
+    assert identity.executable_path
+    assert identity.process_name
+    assert identity.creation_time_ns > 0
+    assert service.same_process(identity, os.getpid())
+
+
+def test_windows_identity_rejects_invalid_process_without_positive_match():
+    if os.name != "nt":
+        pytest.skip("Windows-only runtime identity validation")
+
+    service = ApplicationIdentityService()
+    assert not service.same_process(process(), os.getpid())
