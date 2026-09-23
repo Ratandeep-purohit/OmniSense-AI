@@ -54,7 +54,8 @@ class DesktopAutomationService:
             try: x=int(x); y=int(y)
             except (TypeError,ValueError) as exc: raise AutomationTargetError("CLICK/MOVE requires integer x/y parameters.") from exc
             if not 0 <= x <= 10000 or not 0 <= y <= 10000: raise AutomationTargetError("Target coordinates are outside safety bounds.")
-        return ResolvedTarget(x=x,y=y,app_key=target.window_id)
+        window_id = int(params["window_id"]) if params.get("window_id") else None
+        return ResolvedTarget(x=x,y=y,app_key=target.window_id,window_id=window_id,semantic_name=params.get("target_name"),control_type=params.get("control_type"),automation_id=params.get("automation_id"))
 
     def close(self) -> None:
         with self._lock:
