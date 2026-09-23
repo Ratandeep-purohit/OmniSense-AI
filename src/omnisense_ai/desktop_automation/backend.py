@@ -8,6 +8,7 @@ import time
 from typing import Protocol
 
 from ..action_planning.models import ActionStep, ActionType
+from ..application_discovery import WindowsApplicationResolver
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,36 +95,37 @@ class PyAutoGUIDesktopBackend:
 
 
 class WindowsDesktopBackend(PyAutoGUIDesktopBackend):
-    """Explicit Windows backend with a small, fixed application allowlist.
+    """Windows backend using OS-discovered application entry points.
 
-    Application launching uses Windows Shell file/URI associations rather than
-    arbitrary shell commands. No command string, PowerShell script, or
-    user-supplied executable path is accepted.
+    The backend does not accept arbitrary executable paths, shell commands or
+    PowerShell. It launches only a target that the resolver can rediscover from
+    Windows Start Menu shortcuts or App Paths registrations.
     """
 
-    _LAUNCH_TARGETS = {
-        "word": "ms-word:",
-        "excel": "ms-excel:",
-        "powerpoint": "ms-powerpoint:",
-        "notepad": "notepad.exe",
-        "calculator": "calc.exe",
-        "steam": "steam://open/main",
-    }
+    def __init__(self) -> None:
+        super().__init__()
+        self._application_resolver = WindowsApplicationResolver()
 
     def execute(self, step: ActionStep, target: ResolvedTarget) -> str:
         if step.action_type != ActionType.OPEN_APP:
             return super().execute(step, target)
 
-        app = dict(step.parameters).get("app")
-        launch_target = dict(step.parameters).get("launch_target")
-        if app not in self._LAUNCH_TARGETS:
-            raise ValueError("Application is not on the OmniSense allowlist.")
-        if launch_target != self._LAUNCH_TARGETS[app]:
-            raise ValueError("Application launch target does not match the allowlist.")
+        params = dict(step.parameters)
+        launch_target = params.get("launch_target")
+        application_id = params.get("application_id")
+        display_name = params.get("display_name", "application")
+
+        if not launch_target or not application_id:
+            raise ValueError("Application launch requires a discovered application identity.")
+
+        if not self._application_resolver.is_trusted_target(launch_target):
+            raise ValueError("Application launch target is not a current Windows-discovered entry point.")
 
         if os.name != "nt":
             raise RuntimeError("Windows desktop automation is only available on Windows.")
 
+        # os.startfile delegates to the Windows shell. It can launch a trusted
+        # .lnk entry without exposing a command interpreter or arbitrary argv.
         os.startfile(launch_target)
         time.sleep(0.8)
-        return f"{app} launch requested"
+        return f"{display_name} launch requested"
