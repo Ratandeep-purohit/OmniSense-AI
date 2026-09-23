@@ -189,7 +189,7 @@ class WindowsApplicationResolver:
 
     @staticmethod
     def _normalize(value: str) -> str:
-        return re.sub(r"\\s+", " ", re.sub(r"[^a-z0-9]+", " ", value.casefold())).strip()
+        return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", value.casefold())).strip()
 
     @staticmethod
     def _deduplicate(
