@@ -6,7 +6,9 @@ from dataclasses import replace
 from datetime import datetime, timezone
 import time
 
-from .action_verification.models import VerificationEvidence
+from .action_verification.models import VerificationEvidence, VerificationConfig
+from .action_verification.service import ActionVerificationService
+from .capabilities import Capability, CapabilityManager
 from .application_discovery import ApplicationCandidate, WindowsApplicationResolver
 from .config import CaptureConfig
 from .context_engine.models import ContextSnapshot
@@ -48,15 +50,20 @@ class DesktopProductRuntime:
         self.context_engine = ContextEngine()
         self.application_resolver = WindowsApplicationResolver()
         self.automation_enabled = False
+        self.capabilities = CapabilityManager(ttl_seconds=3600)
         self.automation = DesktopAutomationService(
             AutomationConfig(enabled=False),
             NullDesktopAutomationBackend(),
         )
-        self.pipeline = OmniSensePipeline(automation=self.automation)
+        self.pipeline = OmniSensePipeline(automation=self.automation, capabilities=self.capabilities, require_execution_capability=True, verification=ActionVerificationService(VerificationConfig(require_temporal_transition=True)))
 
     def set_automation_enabled(self, enabled: bool) -> None:
         self.automation.close()
         self.automation_enabled = enabled
+        if enabled:
+            self.capabilities.grant(Capability.EXECUTE, "desktop-session")
+        else:
+            self.capabilities.revoke(Capability.EXECUTE)
         backend = WindowsDesktopBackend() if enabled else NullDesktopAutomationBackend()
         self.automation = DesktopAutomationService(
             AutomationConfig(enabled=enabled),
@@ -104,6 +111,7 @@ class DesktopProductRuntime:
         return self.pipeline.run(
             snapshot,
             intent,
+            before_evidence_provider=self._evidence_before_execution,
             evidence_provider=self._evidence_after_execution,
         )
 
@@ -111,6 +119,19 @@ class DesktopProductRuntime:
         self.capture.close()
         self.windows.close()
         self.automation.close()
+
+    def _evidence_before_execution(self, plan, snapshot: ContextSnapshot) -> VerificationEvidence:
+        window = self._safe_window().window
+        return VerificationEvidence(
+            context_id=snapshot.context.context_id,
+            captured_at=datetime.now(timezone.utc),
+            window_id=window.hwnd if window else None,
+            app_name=window.process_name if window else None,
+            window_title=window.title if window else None,
+            facts=(("phase", "before"), ("window_present", "true" if window else "false")),
+            source="windows_pre_action_snapshot",
+            executable_path=window.executable_path if window else None,
+        )
 
     def _evidence_after_execution(self, plan, execution: AutomationResult) -> VerificationEvidence:
         """Collect fresh post-action Windows evidence for the exact app identity."""
