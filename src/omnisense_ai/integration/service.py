@@ -16,6 +16,7 @@ from ..action_graph.service import ActionGraphBuilder
 from ..preconditions import PreconditionEngine
 from ..capabilities import Capability,CapabilityManager
 from ..observability import EventLog
+from ..recovery import RecoveryEngine
 from .errors import IntegrationInputError
 from .models import PipelineResult,PipelineStatus,PipelineTrace
 
@@ -23,7 +24,7 @@ class OmniSensePipeline:
     """AI proposes; policy authorizes; capability grants authority; automation executes; verification proves."""
     def __init__(self,*,planner=None,security=None,safety=None,automation=None,verification=None,
                  graph_builder=None,preconditions=None,capabilities=None,observability=None,
-                 require_execution_capability=False):
+                 require_execution_capability=False, recovery=None):
         self.security=security or SecurityService()
         self.planner=planner or ActionPlanner()
         self.safety=safety or SafetyPermissionEngine()
@@ -34,6 +35,7 @@ class OmniSensePipeline:
         self.capabilities=capabilities or CapabilityManager()
         self.observability=observability or EventLog()
         self.require_execution_capability=require_execution_capability
+        self.recovery=recovery or RecoveryEngine()
 
     def run(self,snapshot:ContextSnapshot,intent:str,*,evidence=None,evidence_provider:Callable|None=None,
             before_evidence_provider:Callable|None=None,now=None)->PipelineResult:
