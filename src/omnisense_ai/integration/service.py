@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Callable
 
+from ..action_planning.models import ActionPlan
 from ..action_planning.service import ActionPlanner
 from ..action_verification.models import VerificationEvidence
 from ..action_verification.service import ActionVerificationService
@@ -45,7 +46,7 @@ class OmniSensePipeline:
         intent: str,
         *,
         evidence: VerificationEvidence | None = None,
-        evidence_provider: Callable[[object, AutomationResult], VerificationEvidence] | None = None,
+        evidence_provider: Callable[[ActionPlan, AutomationResult], VerificationEvidence] | None = None,
         now: datetime | None = None,
     ) -> PipelineResult:
         current = now or datetime.now(timezone.utc)
