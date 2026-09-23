@@ -69,7 +69,7 @@ class DesktopProductRuntime:
             AutomationConfig(enabled=enabled),
             backend,
         )
-        self.pipeline = OmniSensePipeline(automation=self.automation)
+        self.pipeline = OmniSensePipeline(automation=self.automation, capabilities=self.capabilities, require_execution_capability=True, verification=ActionVerificationService(VerificationConfig(require_temporal_transition=True)))
 
     def snapshot(self) -> ContextSnapshot:
         self.capture.start()
