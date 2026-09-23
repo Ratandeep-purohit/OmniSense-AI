@@ -156,5 +156,5 @@ def test_stale_context_is_blocked_before_automation() -> None:
     )
     result = pipeline(enabled=True).run(ContextSnapshot(context=context, user_context=None), "wait")
     assert result.status is PipelineStatus.BLOCKED
-    assert result.trace.blocked_at == "safety"
+    assert result.trace.blocked_at == "preconditions"
     assert result.execution is None
