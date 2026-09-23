@@ -132,11 +132,7 @@ def test_verification_stage_is_reachable() -> None:
 def test_trace_is_monotonic() -> None:
     result = pipeline(enabled=True).run(snapshot(), "wait")
     assert result.trace.stages == (
-        "context",
-        "security",
-        "action_planning",
-        "safety",
-        "desktop_automation",
+        "context", "security", "action_planning", "action_graph", "preconditions", "safety", "desktop_automation"
     )
 
 
