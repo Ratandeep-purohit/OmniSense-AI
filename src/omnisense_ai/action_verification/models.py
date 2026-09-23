@@ -33,6 +33,7 @@ class VerificationEvidence:
     visible_text: str = ""
     window_id: int | None = None
     app_name: str | None = None
+    application_id: str | None = None
     window_title: str | None = None
     facts: tuple[tuple[str,str], ...] = ()
     source: str = "unknown"
