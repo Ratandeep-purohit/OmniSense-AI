@@ -23,4 +23,18 @@ def test_open_word_is_allowlisted_low_risk_plan():
     assert step.action_type.value == "open_app"
     params = dict(step.parameters)
     assert params["app"] == "word"
-    assert step.expected_outcome == "app_is:WINWORD.EXE"
+    assert step.expected_outcome == "app_is_any:WINWORD.EXE"
+
+
+def test_open_calculator_uses_bounded_host_identities():
+    plan = ActionPlanner().plan(snapshot(), "open calculator")
+    assert plan.status is PlanStatus.READY
+    assert plan.steps[0].expected_outcome == "app_is_any:CalculatorApp.exe|ApplicationFrameHost.exe"
+
+
+def test_open_steam_is_allowlisted():
+    plan = ActionPlanner().plan(snapshot(), "open steam")
+    assert plan.status is PlanStatus.READY
+    params = dict(plan.steps[0].parameters)
+    assert params["app"] == "steam"
+    assert params["launch_target"] == "steam://open/main"
