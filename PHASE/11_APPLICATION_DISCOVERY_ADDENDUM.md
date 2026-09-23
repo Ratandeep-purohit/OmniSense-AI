@@ -50,9 +50,9 @@ Verification remains post-execution and does not grant additional authority.
 
 ## Important limitation
 
-This covers standard Windows application entry points. Some packaged/UWP apps or applications that deliberately expose no Start Menu/App Paths entry may need a future Windows AppsFolder/AUMID discovery adapter.
+Packaged Windows applications are also discovered through AUMID registry entries and launched through the Windows AppsFolder shell namespace. The AUMID target is revalidated before execution.
 
-That future adapter must preserve the same rule: discover through Windows-owned application registration, then validate the exact identity before launch.
+Applications that expose none of these Windows-owned entry points remain unresolved rather than falling back to arbitrary executable paths.
 
 ## Acceptance criteria
 
