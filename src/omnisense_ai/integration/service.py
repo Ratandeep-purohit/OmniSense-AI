@@ -66,7 +66,10 @@ class OmniSensePipeline:
         before_evidence=before_evidence_provider(plan,snapshot) if before_evidence_provider else None
         try:
             execution=self.automation.execute(plan,AutomationRequest(plan.plan_id,plan.context_id,decision))
-        except Exception as exc: return self._result(PipelineStatus.FAILED,snapshot,sanitized,plan,decision,None,None,stages+["desktop_automation"],"desktop_automation",exc)
+        except Exception as exc:
+            recovery=self.recovery.decide(attempt=0,error=str(exc))
+            self.observability.emit("recovery.decision",trace_id,"blocked",recovery_action=recovery.action.value)
+            return self._result(PipelineStatus.FAILED,snapshot,sanitized,plan,decision,None,None,stages+["desktop_automation","recovery"],"desktop_automation",exc)
         stages.append("desktop_automation")
         if evidence_provider:
             try: evidence=evidence_provider(plan,execution)
