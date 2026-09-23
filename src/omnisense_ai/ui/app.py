@@ -88,7 +88,7 @@ class _PermissionDialog(QDialog):
 
         detail = QLabel(
             "OmniSense will use its bounded desktop automation backend for this action.\\n"
-            "Only the requested action is authorized; arbitrary commands are not allowed."
+            "The bounded desktop automation capability will stay enabled for this session.\nArbitrary commands are never allowed."
         )
         detail.setWordWrap(True)
         detail.setStyleSheet("color:#64748b; line-height:1.4;")
@@ -97,7 +97,7 @@ class _PermissionDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch()
         cancel = QPushButton("Cancel")
-        allow = QPushButton("Allow once")
+        allow = QPushButton("Allow for session")
         allow.setDefault(True)
         allow.setObjectName("primaryButton")
         cancel.clicked.connect(self.reject)
