@@ -49,6 +49,8 @@ class OmniSensePipeline:
         try: plan=self.planner.plan(snapshot,sanitized)
         except Exception as exc: return self._result(PipelineStatus.BLOCKED,snapshot,sanitized,None,None,None,None,stages,"action_planning",exc)
         stages.append("action_planning")
+        if plan.status.value != "ready":
+            return PipelineResult(PipelineStatus.BLOCKED,snapshot.context.context_id,sanitized,plan,None,None,None,PipelineTrace(tuple(stages),"action_planning"),"Only READY plans can reach authorization.")
         graph=self.graph_builder.build(plan); stages.append("action_graph")
         pre=self.preconditions.evaluate(plan,snapshot,max_age_seconds=self.safety.config.max_context_age_seconds)
         if not pre.allowed:
