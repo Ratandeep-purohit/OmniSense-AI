@@ -103,3 +103,16 @@ def test_app_is_any_accepts_bounded_windows_host_identity():
     )
     r=ActionVerificationService().verify(p,e,evidence,now=finished+timedelta(seconds=1))
     assert r.status is VerificationStatus.VERIFIED
+
+def test_application_identity_expectation():
+    p = make_plan("application_id:startmenu:epic")
+    finished = datetime.now(timezone.utc)
+    e = make_execution(p, finished=finished)
+    evidence = VerificationEvidence(
+        "ctx-1",
+        finished + timedelta(milliseconds=10),
+        application_id="startmenu:epic",
+        source="test",
+    )
+    r = ActionVerificationService().verify(p, e, evidence, now=finished + timedelta(seconds=1))
+    assert r.status is VerificationStatus.VERIFIED
