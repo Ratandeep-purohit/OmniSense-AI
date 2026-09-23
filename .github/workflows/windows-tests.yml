@@ -1,0 +1,35 @@
+name: Windows Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        shell: pwsh
+        run: python -m pip install -e ".[dev,ocr,automation,windows,ui]"
+      - name: Unit tests
+        shell: pwsh
+        run: python -m pytest -q
+  smoke:
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        shell: pwsh
+        run: python -m pip install -e ".[dev,ocr,automation,windows,ui]"
+      - name: Static Windows smoke harness validation
+        shell: pwsh
+        run: python -m pytest tests/e2e/test_windows_smoke.py -q
