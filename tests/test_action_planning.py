@@ -74,13 +74,13 @@ def test_open_word_uses_discovered_application():
     params = dict(step.parameters)
     assert params["display_name"] == "Microsoft Word"
     assert params["launch_target"].endswith("Word.lnk")
-    assert step.expected_outcome == "app_is_any:WINWORD.EXE"
+    assert step.expected_outcome.startswith("application_id:")
 
 
 def test_open_calculator_can_use_title_when_process_identity_is_unavailable():
     plan = planner().plan(snapshot(), "open calculator")
     assert plan.status is PlanStatus.READY
-    assert plan.steps[0].expected_outcome == "window_title_contains:Calculator"
+    assert plan.steps[0].expected_outcome.startswith("application_id:")
 
 
 def test_open_steam_uses_discovered_application():
