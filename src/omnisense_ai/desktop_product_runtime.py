@@ -65,7 +65,7 @@ class DesktopProductRuntime:
             AutomationConfig(
                 enabled=enabled,
                 allowed_apps=frozenset(
-                    {"word", "excel", "powerpoint", "notepad", "calculator"}
+                    {"word", "excel", "powerpoint", "notepad", "calculator", "steam"}
                 ),
             ),
             backend,
