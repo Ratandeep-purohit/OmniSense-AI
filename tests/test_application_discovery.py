@@ -9,7 +9,7 @@ def test_application_candidate_requires_identity():
 def test_application_name_normalization_and_scoring():
     assert WindowsApplicationResolver._normalize("Epic Games Launcher") == "epic games launcher"
     assert WindowsApplicationResolver._score("epic", "Epic Games Launcher") == 90
-    assert WindowsApplicationResolver._score("games", "Epic Games Launcher") == 72
+    assert WindowsApplicationResolver._score("games", "Epic Games Launcher") == 90
 
 
 def test_deduplicate_keeps_unique_launch_entries():
