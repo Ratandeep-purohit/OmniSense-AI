@@ -45,7 +45,7 @@ class OmniSensePipeline:
         intent: str,
         *,
         evidence: VerificationEvidence | None = None,
-        evidence_provider: Callable[[AutomationResult], VerificationEvidence] | None = None,
+        evidence_provider: Callable[[object, AutomationResult], VerificationEvidence] | None = None,
         now: datetime | None = None,
     ) -> PipelineResult:
         current = now or datetime.now(timezone.utc)
@@ -99,7 +99,7 @@ class OmniSensePipeline:
 
         if evidence_provider is not None:
             try:
-                evidence = evidence_provider(execution)
+                evidence = evidence_provider(plan, execution)
             except Exception as exc:
                 return self._result(
                     PipelineStatus.NOT_VERIFIED, snapshot, sanitized_intent, plan, decision,
@@ -138,7 +138,7 @@ class OmniSensePipeline:
             status, snapshot.context.context_id, sanitized_intent,
             plan, decision, execution, verification,
             PipelineTrace(tuple(stages)),
-            "Pipeline completed and verification was evaluated.",
+            "Action completed and was verified." if status is PipelineStatus.COMPLETED else "Action executed, but OmniSense could not verify the expected result.",
         )
 
     @staticmethod
