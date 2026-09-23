@@ -53,6 +53,7 @@ class WindowsApplicationResolver:
             return ()
         candidates = list(self._start_menu_candidates())
         candidates.extend(self._app_path_candidates())
+        candidates.extend(self._aumid_candidates())
         return self._deduplicate(candidates)
 
     def resolve(self, query: str) -> ApplicationCandidate | None:
@@ -82,6 +83,13 @@ class WindowsApplicationResolver:
 
         if os.name != "nt" or not target:
             return False
+        if target.casefold().startswith("shell:appsfolder\\"):
+            return any(
+                target.casefold() == candidate.launch_target.casefold()
+                for candidate in self.discover()
+                if candidate.source == "aumid"
+            )
+
         try:
             requested = Path(target).resolve(strict=True)
         except (OSError, RuntimeError):
@@ -165,6 +173,72 @@ class WindowsApplicationResolver:
                         source="app_paths",
                         process_name=name,
                     )
+
+    def _aumid_candidates(self) -> Iterable[ApplicationCandidate]:
+        """Discover packaged apps from Windows AUMID registry entries.
+
+        Microsoft documents AUMIDs as the identity used by Windows to launch
+        packaged applications. The registry path below is read-only; no
+        package state is modified.
+        """
+        import winreg
+
+        base = r"Software\Classes\ActivatableClasses\Package"
+        try:
+            root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, base)
+        except OSError:
+            return
+
+        stack: list[tuple[object, int]] = [(root, 0)]
+        seen: set[str] = set()
+        try:
+            while stack:
+                key, depth = stack.pop()
+                if depth > 8:
+                    try:
+                        key.Close()
+                    except OSError:
+                        pass
+                    continue
+                try:
+                    value_count = winreg.QueryInfoKey(key)[1]
+                    for index in range(value_count):
+                        try:
+                            value_name, value, _ = winreg.EnumValue(key, index)
+                        except OSError:
+                            continue
+                        if value_name.casefold() != "appusermodelid" or not isinstance(value, str):
+                            continue
+                        aumid = value.strip()
+                        if "!" not in aumid or aumid.casefold() in seen:
+                            continue
+                        seen.add(aumid.casefold())
+                        family = aumid.split("!", 1)[0]
+                        display = family.rsplit("_", 1)[0].replace(".", " ").replace("_", " ").strip()
+                        if not display:
+                            display = family
+                        yield ApplicationCandidate(
+                            application_id=f"aumid:{aumid.casefold()}",
+                            display_name=display,
+                            launch_target=f"shell:AppsFolder\\{aumid}",
+                            source="aumid",
+                            process_name=None,
+                        )
+
+                    subkey_count = winreg.QueryInfoKey(key)[0]
+                    for index in range(subkey_count):
+                        try:
+                            child = winreg.OpenKey(key, winreg.EnumKey(key, index))
+                        except OSError:
+                            continue
+                        stack.append((child, depth + 1))
+                finally:
+                    try:
+                        key.Close()
+                    except OSError:
+                        pass
+        except OSError:
+            return
 
     @staticmethod
     def _friendly_name(executable: str) -> str:
