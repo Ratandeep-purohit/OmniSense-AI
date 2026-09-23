@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
+import time
 
 from .action_verification.models import VerificationEvidence
 from .config import CaptureConfig
@@ -49,7 +50,7 @@ class DesktopProductRuntime:
             AutomationConfig(
                 enabled=False,
                 allowed_apps=frozenset(
-                    {"word", "excel", "powerpoint", "notepad", "calculator"}
+                    {"word", "excel", "powerpoint", "notepad", "calculator", "steam"}
                 ),
             ),
             NullDesktopAutomationBackend(),
@@ -119,11 +120,31 @@ class DesktopProductRuntime:
         self.windows.close()
         self.automation.close()
 
-    def _evidence_after_execution(
-        self, execution: AutomationResult
-    ) -> VerificationEvidence:
-        window = self._safe_window()
-        info = window.window
+    def _evidence_after_execution(self, plan, execution: AutomationResult) -> VerificationEvidence:
+        """Collect fresh foreground-window evidence after execution.
+
+        App launches can take longer than the automation call itself. Polling is
+        bounded and read-only, so verification waits for the expected foreground
+        application without granting any additional desktop authority.
+        """
+        expected = plan.steps[0].expected_outcome if plan.steps else ""
+        expected_apps = self._expected_apps(expected)
+        expected_title = self._expected_title(expected)
+        deadline = time.monotonic() + 4.0
+        latest = self._safe_window()
+
+        while time.monotonic() < deadline:
+            latest = self._safe_window()
+            info = latest.window
+            process = (info.process_name or "").casefold() if info else ""
+            title = (info.title or "").casefold() if info else ""
+            process_ok = not expected_apps or process in expected_apps
+            title_ok = not expected_title or expected_title in title
+            if info is not None and process_ok and title_ok:
+                break
+            time.sleep(0.2)
+
+        info = latest.window
         return VerificationEvidence(
             context_id=execution.context_id,
             captured_at=datetime.now(timezone.utc),
@@ -131,9 +152,27 @@ class DesktopProductRuntime:
             window_id=info.hwnd if info else None,
             app_name=info.process_name if info else None,
             window_title=info.title if info else None,
-            facts=(("execution.status", execution.status.value),),
+            facts=(
+                ("execution.status", execution.status.value),
+                ("expected.application", ",".join(sorted(expected_apps))),
+            ),
             source="windows_window_detection",
         )
+
+    @staticmethod
+    def _expected_apps(expectation: str) -> set[str]:
+        prefix, sep, value = expectation.partition(":")
+        if not sep or prefix != "app_is_any":
+            return set()
+        return {item.strip().casefold() for item in value.split("|") if item.strip()}
+
+    @staticmethod
+    def _expected_title(expectation: str) -> str:
+        # Calculator may be hosted by ApplicationFrameHost.exe. Its title is
+        # therefore an additional bounded signal when that process is used.
+        if "calculatorapp.exe" in expectation.casefold() and "applicationframehost.exe" in expectation.casefold():
+            return "calculator"
+        return ""
 
     def _safe_window(self) -> WindowDetectionResult:
         try:
