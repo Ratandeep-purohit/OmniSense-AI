@@ -55,6 +55,9 @@ class ActionPlanner:
             if process_name:
                 executable = process_name
                 expected = f"app_is_any:{process_name}"
+            elif candidate.source == "aumid":
+                executable = candidate.display_name
+                expected = f"window_title_contains:{query}"
             else:
                 executable = candidate.display_name
                 expected = f"window_title_contains:{candidate.display_name}"
