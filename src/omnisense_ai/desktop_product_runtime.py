@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import time
 
 from .action_verification.models import VerificationEvidence
+from .application_discovery import ApplicationCandidate, WindowsApplicationResolver
 from .config import CaptureConfig
 from .context_engine.models import ContextSnapshot
 from .context_engine.service import ContextEngine
@@ -45,6 +46,7 @@ class DesktopProductRuntime:
         )
         self.windows = WindowDetectionService()
         self.context_engine = ContextEngine()
+        self.application_resolver = WindowsApplicationResolver()
         self.automation_enabled = False
         self.automation = DesktopAutomationService(
             AutomationConfig(enabled=False),
@@ -111,15 +113,9 @@ class DesktopProductRuntime:
         self.automation.close()
 
     def _evidence_after_execution(self, plan, execution: AutomationResult) -> VerificationEvidence:
-        """Collect fresh post-action Windows evidence.
-
-        Verification is not restricted to the foreground window. Applications
-        can launch in the background, hand off from a bootstrapper, or briefly
-        change foreground ownership while their real top-level window becomes
-        available. We therefore observe the complete visible top-level window
-        set and prefer a foreground match when one exists.
-        """
+        """Collect fresh post-action Windows evidence for the exact app identity."""
         expected = plan.steps[0].expected_outcome if plan.steps else ""
+        candidate = self._planned_application_candidate(plan)
         expected_apps = self._expected_apps(expected)
         expected_title = self._expected_title(expected)
         deadline = time.monotonic() + 5.0
@@ -129,8 +125,10 @@ class DesktopProductRuntime:
         while time.monotonic() < deadline:
             foreground = self._safe_window()
             windows = self._safe_windows()
-            candidates = tuple(w for w in windows if self._window_matches(w, expected_apps, expected_title))
-
+            candidates = tuple(
+                w for w in windows
+                if self._window_matches(w, candidate, expected_apps, expected_title)
+            )
             if candidates:
                 matched_window = next(
                     (w for w in candidates if w.is_foreground),
@@ -138,23 +136,21 @@ class DesktopProductRuntime:
                 )
                 latest = foreground
                 break
-
             latest = foreground
             time.sleep(0.2)
 
         info = matched_window or latest.window
         verified_target = matched_window is not None
         observed_app = info.process_name if info else None
-
-        if (expected_apps or expected_title) and not verified_target:
-            observed_app = None
+        application_id = candidate.application_id if candidate and verified_target else None
 
         return VerificationEvidence(
             context_id=execution.context_id,
             captured_at=datetime.now(timezone.utc),
             visible_text="",
             window_id=info.hwnd if info else None,
-            app_name=observed_app,
+            app_name=observed_app if verified_target else None,
+            application_id=application_id,
             window_title=info.title if info else None,
             facts=(
                 ("execution.status", execution.status.value),
@@ -165,19 +161,67 @@ class DesktopProductRuntime:
             source="windows_window_enumeration",
         )
 
+    def _planned_application_candidate(self, plan) -> ApplicationCandidate | None:
+        if not plan.steps:
+            return None
+        step = plan.steps[0]
+        params = dict(step.parameters)
+        application_id = params.get("application_id")
+        query = params.get("app")
+        if not application_id or not query:
+            return None
+        candidate = self.application_resolver.resolve(query)
+        if candidate is None or candidate.application_id.casefold() != application_id.casefold():
+            return None
+        return candidate
+
     def _safe_windows(self):
         try:
             return self.windows.enumerate_visible_windows()
         except Exception:
             return ()
 
-    @staticmethod
-    def _window_matches(window, expected_apps: set[str], expected_title: str) -> bool:
+    @classmethod
+    def _window_matches(
+        cls,
+        window,
+        candidate: ApplicationCandidate | None,
+        expected_apps: set[str],
+        expected_title: str,
+    ) -> bool:
+        if not window.is_visible:
+            return False
+
         process = (window.process_name or "").casefold()
         title = (window.title or "").casefold()
-        process_ok = not expected_apps or process in expected_apps
-        title_ok = not expected_title or expected_title in title
-        return bool(window.is_visible and process_ok and title_ok)
+
+        if expected_apps and process not in expected_apps:
+            return False
+        if expected_title and expected_title not in title:
+            return False
+
+        if candidate is None:
+            return bool(expected_apps or expected_title)
+
+        if candidate.process_name:
+            return process == candidate.process_name.casefold()
+
+        display = cls._normalize_name(candidate.display_name)
+        title_normalized = cls._normalize_name(window.title)
+        process_normalized = cls._normalize_name(process.rsplit(".", 1)[0])
+        if display and display in title_normalized:
+            return True
+
+        # A launcher can expose a shortened window title or a helper process.
+        # Require meaningful token overlap rather than accepting any substring.
+        display_tokens = set(display.split())
+        observed_tokens = set((title_normalized + " " + process_normalized).split())
+        return len(display_tokens & observed_tokens) >= min(2, len(display_tokens))
+
+    @staticmethod
+    def _normalize_name(value: str) -> str:
+        import re
+        return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
 
     @staticmethod
     def _expected_apps(expectation: str) -> set[str]:
