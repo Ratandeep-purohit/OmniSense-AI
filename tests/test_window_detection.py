@@ -24,6 +24,11 @@ class FakeBackend:
             raise self.error
         return self.window
 
+    def enumerate_visible_windows(self):
+        if self.error:
+            raise self.error
+        return tuple(w for w in (self.window,) if w is not None)
+
 
 def make_window(**overrides):
     values = {
@@ -98,3 +103,18 @@ def test_window_detection_result_requires_timezone_aware_timestamp():
             detected_at=datetime(2026, 1, 1),
             backend="fake",
         )
+
+def test_service_enumerates_visible_windows():
+    foreground = make_window()
+    background = make_window(hwnd=202, title="Epic Games Launcher", process_id=9002, process_name="EpicGamesLauncher.exe", is_foreground=False)
+    backend = FakeBackend(foreground)
+    backend.enumerate_visible_windows = lambda: (foreground, background)
+    result = WindowDetectionService(backend).enumerate_visible_windows()
+    assert [item.title for item in result] == ["Visual Studio Code", "Epic Games Launcher"]
+
+
+def test_service_maps_window_enumeration_failure():
+    service = WindowDetectionService(FakeBackend(error=RuntimeError("boom")))
+    with pytest.raises(WindowDetectionBackendError):
+        service.enumerate_visible_windows()
+
