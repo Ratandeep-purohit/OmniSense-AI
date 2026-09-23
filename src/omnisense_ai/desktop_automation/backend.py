@@ -107,6 +107,7 @@ class WindowsDesktopBackend(PyAutoGUIDesktopBackend):
         "powerpoint": "ms-powerpoint:",
         "notepad": "notepad.exe",
         "calculator": "calc.exe",
+        "steam": "steam://open/main",
     }
 
     def execute(self, step: ActionStep, target: ResolvedTarget) -> str:
