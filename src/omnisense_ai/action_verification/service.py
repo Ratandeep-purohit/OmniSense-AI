@@ -55,6 +55,16 @@ class ActionVerificationService:
         if sep and prefix=="window_title_contains" and value.strip():
             ok=value.strip().casefold() in (evidence.window_title or "").casefold()
             return VerificationCheck(step_id,action_type,VerificationCheckStatus.PASSED if ok else VerificationCheckStatus.FAILED,raw,"Window title matched." if ok else "Window title did not match.",evidence.captured_at)
+        if sep and prefix == "application_id" and value.strip():
+            ok = (evidence.application_id or "").casefold() == value.strip().casefold()
+            return VerificationCheck(
+                step_id,
+                action_type,
+                VerificationCheckStatus.PASSED if ok else VerificationCheckStatus.FAILED,
+                raw,
+                "Application identity matched." if ok else "Application identity did not match.",
+                evidence.captured_at,
+            )
         if sep and prefix in ("app_is", "app_is_any") and value.strip():
             expected_apps = (
                 tuple(item.strip().casefold() for item in value.split("|") if item.strip())
