@@ -132,6 +132,7 @@ class DesktopProductRuntime:
         expected_title = self._expected_title(expected)
         deadline = time.monotonic() + 4.0
         latest = self._safe_window()
+        matched = not expected_apps and not expected_title
 
         while time.monotonic() < deadline:
             latest = self._safe_window()
@@ -141,16 +142,20 @@ class DesktopProductRuntime:
             process_ok = not expected_apps or process in expected_apps
             title_ok = not expected_title or expected_title in title
             if info is not None and process_ok and title_ok:
+                matched = True
                 break
             time.sleep(0.2)
 
         info = latest.window
+        observed_app = info.process_name if info else None
+        if (expected_apps or expected_title) and not matched:
+            observed_app = None
         return VerificationEvidence(
             context_id=execution.context_id,
             captured_at=datetime.now(timezone.utc),
             visible_text="",
             window_id=info.hwnd if info else None,
-            app_name=info.process_name if info else None,
+            app_name=observed_app,
             window_title=info.title if info else None,
             facts=(
                 ("execution.status", execution.status.value),
