@@ -88,3 +88,18 @@ def test_fact_expectation():
     evidence=VerificationEvidence("ctx-1",finished+timedelta(milliseconds=1),facts=(("save_state","saved"),),source="test")
     r=ActionVerificationService().verify(p,e,evidence)
     assert r.status is VerificationStatus.VERIFIED
+
+
+def test_app_is_any_accepts_bounded_windows_host_identity():
+    p=make_plan("app_is_any:CalculatorApp.exe|ApplicationFrameHost.exe")
+    finished=datetime.now(timezone.utc)
+    e=make_execution(p,finished=finished)
+    evidence=VerificationEvidence(
+        "ctx-1",
+        finished+timedelta(milliseconds=10),
+        app_name="ApplicationFrameHost.exe",
+        window_title="Calculator",
+        source="test",
+    )
+    r=ActionVerificationService().verify(p,e,evidence,now=finished+timedelta(seconds=1))
+    assert r.status is VerificationStatus.VERIFIED
