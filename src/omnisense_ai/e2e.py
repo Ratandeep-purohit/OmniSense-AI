@@ -5,7 +5,7 @@ from .application_discovery import WindowsApplicationResolver
 @dataclass(frozen=True,slots=True)
 class SmokeTarget:
     query:str; expected_processes:tuple[str,...]=(); required:bool=True
-DEFAULT_SMOKE_TARGETS=(SmokeTarget("notepad",("notepad.exe",)),SmokeTarget("calculator",("calculatorapp.exe","applicationframehost.exe")),SmokeTarget("microsoft word",("winword.exe",)),SmokeTarget("steam",("steam.exe",)),SmokeTarget("epic games launcher",("epicgameslauncher.exe",)))
+DEFAULT_SMOKE_TARGETS=(\n    SmokeTarget("notepad",("notepad.exe",)),\n    SmokeTarget("calculator",("calculatorapp.exe","applicationframehost.exe")),\n    SmokeTarget("microsoft word",("winword.exe",)),\n    SmokeTarget("microsoft excel",("excel.exe",)),\n    SmokeTarget("microsoft powerpoint",("powerpnt.exe",)),\n    SmokeTarget("chrome",("chrome.exe",)),\n    SmokeTarget("edge",("msedge.exe",)),\n    SmokeTarget("visual studio code",("code.exe",)),\n    SmokeTarget("steam",("steam.exe",)),\n    SmokeTarget("epic games launcher",("epicgameslauncher.exe",)),\n    SmokeTarget("file explorer",("explorer.exe",)),\n)
 class WindowsE2EHarness:
     def __init__(self,resolver=None): self.resolver=resolver or WindowsApplicationResolver()
     def require_enabled(self):
