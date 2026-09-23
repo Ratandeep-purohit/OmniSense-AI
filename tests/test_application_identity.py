@@ -82,7 +82,24 @@ def test_windows_identity_reads_the_current_process():
     assert service.same_process(identity, os.getpid())
 
 
-def test_windows_identity_rejects_invalid_process_without_positive_match():
+def test_windows_identity_reads_a_real_foreground_window_when_available():
+    if os.name != "nt":
+        pytest.skip("Windows-only runtime identity validation")
+
+    service = ApplicationIdentityService()
+    try:
+        identity = service.identify_foreground_window()
+    except Exception as exc:
+        pytest.skip(f"No readable foreground window in this Windows test session: {exc}")
+
+    assert identity.hwnd > 0
+    assert identity.process.pid > 0
+    assert identity.process.executable_path
+    assert identity.process.creation_time_ns > 0
+    assert service.same_window(identity, identity.hwnd)
+
+
+def test_windows_identity_rejects_pid_reuse_without_positive_match():
     if os.name != "nt":
         pytest.skip("Windows-only runtime identity validation")
 
