@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from ..app import health_check
 from ..config import load_config
+from ..production_diagnostics import collect_diagnostics
 from ..desktop_product_runtime import DesktopProductRuntime
 from ..integration.models import PipelineResult, PipelineStatus
 from ..safety_permission.models import PermissionDecision
