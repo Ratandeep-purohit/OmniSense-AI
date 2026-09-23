@@ -1,7 +1,7 @@
 """Precondition evaluation before authorization/execution."""
 from dataclasses import dataclass
 from .action_planning.models import ActionPlan,PlanStatus
-from ..context_engine.models import ContextSnapshot
+from .context_engine.models import ContextSnapshot
 @dataclass(frozen=True,slots=True)
 class PreconditionResult:
     allowed: bool
