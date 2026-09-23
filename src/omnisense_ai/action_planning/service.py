@@ -26,8 +26,9 @@ _APP_ALIASES = {
     "powerpoint": ("powerpoint", "POWERPNT.EXE", "ms-powerpoint:"),
     "microsoft powerpoint": ("powerpoint", "POWERPNT.EXE", "ms-powerpoint:"),
     "notepad": ("notepad", "notepad.exe", "notepad.exe"),
-    "calculator": ("calculator", "CalculatorApp.exe", "calc.exe"),
-    "calc": ("calculator", "CalculatorApp.exe", "calc.exe"),
+    "calculator": ("calculator", "CalculatorApp.exe|ApplicationFrameHost.exe", "calc.exe"),
+    "calc": ("calculator", "CalculatorApp.exe|ApplicationFrameHost.exe", "calc.exe"),
+    "steam": ("steam", "steam.exe", "steam://open/main"),
 }
 
 
@@ -60,7 +61,7 @@ class ActionPlanner:
                 ActionTarget("application", f"Open {key}", expected_text=key),
                 (("app", key), ("executable", executable), ("launch_target", launch_target)),
                 ActionRisk.LOW,
-                f"app_is:{executable}",
+                f"app_is_any:{executable}",
                 True,
             )
             return ActionPlan(
