@@ -47,12 +47,7 @@ class DesktopProductRuntime:
         self.context_engine = ContextEngine()
         self.automation_enabled = False
         self.automation = DesktopAutomationService(
-            AutomationConfig(
-                enabled=False,
-                allowed_apps=frozenset(
-                    {"word", "excel", "powerpoint", "notepad", "calculator", "steam"}
-                ),
-            ),
+            AutomationConfig(enabled=False),
             NullDesktopAutomationBackend(),
         )
         self.pipeline = OmniSensePipeline(automation=self.automation)
@@ -62,12 +57,7 @@ class DesktopProductRuntime:
         self.automation_enabled = enabled
         backend = WindowsDesktopBackend() if enabled else NullDesktopAutomationBackend()
         self.automation = DesktopAutomationService(
-            AutomationConfig(
-                enabled=enabled,
-                allowed_apps=frozenset(
-                    {"word", "excel", "powerpoint", "notepad", "calculator", "steam"}
-                ),
-            ),
+            AutomationConfig(enabled=enabled),
             backend,
         )
         self.pipeline = OmniSensePipeline(automation=self.automation)
