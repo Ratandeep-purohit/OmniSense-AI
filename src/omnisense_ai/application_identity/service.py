@@ -24,7 +24,6 @@ class ApplicationIdentityService:
     """Resolve logical applications and capture immutable runtime identities."""
 
     _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-    _PROCESS_VM_READ = 0x0010
 
     def __init__(self, resolver: WindowsApplicationResolver | None = None) -> None:
         self.resolver = resolver or WindowsApplicationResolver()
@@ -52,11 +51,7 @@ class ApplicationIdentityService:
             if candidate.launch_target.casefold().endswith(".exe")
             else None
         )
-        aumid = (
-            candidate.launch_target
-            if candidate.source == "aumid"
-            else None
-        )
+        aumid = candidate.launch_target if candidate.source == "aumid" else None
         return ApplicationIdentity(
             application_id=candidate.application_id,
             display_name=candidate.display_name,
@@ -111,7 +106,6 @@ class ApplicationIdentityService:
         self._require_windows()
         if hwnd <= 0:
             raise ValueError("Window handle must be positive.")
-
         if not self._user32.IsWindow(hwnd):
             raise ApplicationIdentityError("The supplied HWND is no longer valid.")
 
@@ -122,15 +116,22 @@ class ApplicationIdentityService:
             raise ApplicationIdentityError("Windows could not resolve the window process.")
 
         process = self.identify_process(int(process_id.value))
-        title = self._read_window_title(hwnd)
-        class_name = self._read_class_name(hwnd)
         return WindowIdentity(
             hwnd=hwnd,
             process=process,
-            title=title,
-            class_name=class_name,
+            title=self._read_window_title(hwnd),
+            class_name=self._read_class_name(hwnd),
             is_visible=bool(self._user32.IsWindowVisible(hwnd)),
         )
+
+    def identify_foreground_window(self) -> WindowIdentity:
+        """Read the identity of the current foreground window without changing focus."""
+
+        self._require_windows()
+        hwnd = int(self._user32.GetForegroundWindow())
+        if hwnd <= 0:
+            raise ApplicationIdentityError("Windows has no foreground window.")
+        return self.identify_window(hwnd)
 
     def same_process(self, expected: ProcessIdentity, pid: int) -> bool:
         """Return False rather than throwing when the process has exited/reused its PID."""
@@ -154,43 +155,29 @@ class ApplicationIdentityService:
         self._user32 = ctypes.WinDLL("user32", use_last_error=True)
         self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
+        self._user32.GetForegroundWindow.argtypes = []
+        self._user32.GetForegroundWindow.restype = wintypes.HWND
         self._user32.IsWindow.argtypes = [wintypes.HWND]
         self._user32.IsWindow.restype = wintypes.BOOL
         self._user32.IsWindowVisible.argtypes = [wintypes.HWND]
         self._user32.IsWindowVisible.restype = wintypes.BOOL
         self._user32.GetWindowThreadProcessId.argtypes = [
-            wintypes.HWND,
-            ctypes.POINTER(wintypes.DWORD),
+            wintypes.HWND, ctypes.POINTER(wintypes.DWORD)
         ]
         self._user32.GetWindowThreadProcessId.restype = wintypes.DWORD
         self._user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
         self._user32.GetWindowTextLengthW.restype = ctypes.c_int
-        self._user32.GetWindowTextW.argtypes = [
-            wintypes.HWND,
-            wintypes.LPWSTR,
-            ctypes.c_int,
-        ]
+        self._user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
         self._user32.GetWindowTextW.restype = ctypes.c_int
-        self._user32.GetClassNameW.argtypes = [
-            wintypes.HWND,
-            wintypes.LPWSTR,
-            ctypes.c_int,
-        ]
+        self._user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
         self._user32.GetClassNameW.restype = ctypes.c_int
 
-        self._kernel32.OpenProcess.argtypes = [
-            wintypes.DWORD,
-            wintypes.BOOL,
-            wintypes.DWORD,
-        ]
+        self._kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
         self._kernel32.OpenProcess.restype = wintypes.HANDLE
         self._kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
         self._kernel32.CloseHandle.restype = wintypes.BOOL
         self._kernel32.QueryFullProcessImageNameW.argtypes = [
-            wintypes.HANDLE,
-            wintypes.DWORD,
-            wintypes.LPWSTR,
-            ctypes.POINTER(wintypes.DWORD),
+            wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)
         ]
         self._kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
         self._kernel32.GetProcessTimes.argtypes = [
@@ -202,8 +189,7 @@ class ApplicationIdentityService:
         ]
         self._kernel32.GetProcessTimes.restype = wintypes.BOOL
         self._kernel32.ProcessIdToSessionId.argtypes = [
-            wintypes.DWORD,
-            ctypes.POINTER(wintypes.DWORD),
+            wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)
         ]
         self._kernel32.ProcessIdToSessionId.restype = wintypes.BOOL
 
@@ -214,9 +200,7 @@ class ApplicationIdentityService:
     def _query_process_path(self, handle) -> str:
         size = wintypes.DWORD(32768)
         buffer = ctypes.create_unicode_buffer(size.value)
-        if not self._kernel32.QueryFullProcessImageNameW(
-            handle, 0, buffer, ctypes.byref(size)
-        ):
+        if not self._kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
             raise ApplicationIdentityError("Windows could not read the process executable path.")
         path = buffer.value[: size.value].strip()
         if not path:
@@ -229,16 +213,9 @@ class ApplicationIdentityService:
         kernel = wintypes.FILETIME()
         user = wintypes.FILETIME()
         if not self._kernel32.GetProcessTimes(
-            handle,
-            ctypes.byref(creation),
-            ctypes.byref(exit_time),
-            ctypes.byref(kernel),
-            ctypes.byref(user),
+            handle, ctypes.byref(creation), ctypes.byref(exit_time), ctypes.byref(kernel), ctypes.byref(user)
         ):
             raise ApplicationIdentityError("Windows could not read process creation time.")
-
-        # FILETIME is 100-ns intervals since 1601-01-01 UTC. Keeping the raw
-        # 100-ns value avoids platform-dependent datetime conversion.
         return (creation.dwHighDateTime << 32) | creation.dwLowDateTime
 
     def _query_session_id(self, pid: int) -> int | None:
